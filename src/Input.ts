@@ -1,8 +1,12 @@
 import type { Command} from './commands'
 
+type Dir = 'up' | 'down' | 'left' | 'right';
+
 export default class Input {
     private down = new Set<string>(); //a set is like an array, but there are no duplicate values. this 'down' variable will contain a Set of all keys that are currently held
     private pressed = new Set<string>(); //a set of keys that were just pressed
+
+    private dirStack: Dir[] = [];
 
     constructor(target: Window = window) {
         target.addEventListener('keydown', (e) => {

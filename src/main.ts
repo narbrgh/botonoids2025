@@ -6,6 +6,7 @@ import TileMap from './TileMap';
 import Input from './Input';
 import type { Command } from './commands'
 import Botonoid from './Botonoid';
+import { P1_KEYS, P2_KEYS } from './keymaps';
 
 const canvasEl = document.getElementById('game');
 if (!(canvasEl instanceof HTMLCanvasElement)) throw new Error('Canvas #game not found');

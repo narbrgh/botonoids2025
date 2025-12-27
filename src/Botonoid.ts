@@ -2,6 +2,10 @@ import Vector2 from './Vector2';
 import { Sprite } from './Sprite';
 import type { Command } from './commands';
 
+type Dir = 'up' | 'down' | 'left' | 'right';
+
+
+
 type MoveState = {
     fromPx: Vector2;
     toPx: Vector2;
@@ -14,6 +18,9 @@ export default class Botonoid {
   // Tile position (integers). 
   // Current tile (integer). This becomes the *committed* tile when a move finishes
   tilePos: Vector2;
+
+  //direction facing
+  private facing: Dir = 'down';
 
   // Pixel position (derived)
   readonly tileSize: number;
@@ -39,8 +46,10 @@ export default class Botonoid {
     //ignore move commands while already moving
     if (this.moveState) return;
 
-    const {dx, dy} = Botonoid.dirToDelta(cmd.dir);
+    this.facing = cmd.dir;
+    this.sprite.frame = Botonoid.dirToFrame(this.facing);
 
+    const {dx, dy} = Botonoid.dirToDelta(cmd.dir);
     const nextTileX = this.tilePos.x + dx;
     const nextTileY = this.tilePos.y + dy;
 
@@ -59,6 +68,15 @@ export default class Botonoid {
         durationMs: 500, // 1/2 second
         targetTile: new Vector2(nextTileX, nextTileY),
     };
+  }
+
+  private static dirToFrame(dir: Dir): number {
+    switch (dir) {
+      case 'down': return 2;
+      case 'left': return 1;
+      case 'right': return 3;
+      case 'up': return 0;
+    }
   }
 
   update(dtMs: number): void {
@@ -89,8 +107,8 @@ export default class Botonoid {
     }   
     
     const t = Math.max(0, Math.min(1, this.moveState.elapsedMs / this.moveState.durationMs));
-    const x = this.moveState.fromPx.x + (this.moveState.toPx.x - this.moveState?.fromPx.x) * t;
-    const y = this.moveState.fromPx.y + (this.moveState.toPx.y - this.moveState?.fromPx.y) * t;
+    const x = this.moveState.fromPx.x + (this.moveState.toPx.x - this.moveState.fromPx.x) * t;
+    const y = this.moveState.fromPx.y + (this.moveState.toPx.y - this.moveState.fromPx.y) * t;
     return new Vector2(x, y);
         
     }

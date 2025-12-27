@@ -3,10 +3,11 @@ import { Sprite } from './Sprite';
 import Vector2 from './Vector2';
 import { resources } from './Resources';
 import TileMap from './TileMap';
-import Input from './Input';
-import type { Command } from './commands'
 import Botonoid from './Botonoid';
+
+import KeyboardController from './KeyboardController';
 import { P1_KEYS, P2_KEYS } from './keymaps';
+import type { Command } from './commands';
 
 const canvasEl = document.getElementById('game');
 if (!(canvasEl instanceof HTMLCanvasElement)) throw new Error('Canvas #game not found');
@@ -18,25 +19,8 @@ const ctx = ctxEl;
 
 ctx.imageSmoothingEnabled = false;
 
-// Botonoid sprite uses the shared resource bucket
-const botonoidSprite = new Sprite({
-  resource: resources.images.goldBot,
-  frameSize: new Vector2(32, 32),
-  hFrames: 1,
-  vFrames: 4,
-  frame: 2,
-  scale: 1,
-});
-
 const TILE_SIZE = 32;
 const FRAME_SIZE = 32;
-
-const player = new Botonoid({
-  tileX: 5,
-  tileY: 5,
-  tileSize: TILE_SIZE,
-  sprite: botonoidSprite,
-});
 
 const cols = Math.floor(canvas.width / TILE_SIZE);
 const rows = Math.floor(canvas.height / TILE_SIZE);
@@ -52,17 +36,65 @@ const tileSprite = new Sprite({
 
 const tileMap = new TileMap({cols, rows, tileSize: TILE_SIZE, tileSprite });
 
-const input = new Input();
+// Players
+const goldSprite = new Sprite({
+  resource: resources.images.goldBot,
+  frameSize: new Vector2(32, 32),
+  hFrames: 1,
+  vFrames: 4,
+  frame: 2,
+  scale: 1,
+});
 
-const update = (_dt: number) => {
-  const cmds: Command[] = input.consumeCommands();
+const silverSprite = new Sprite({
+  resource: resources.images.silverBot,
+  frameSize: new Vector2(32, 32),
+  hFrames: 1,
+  vFrames: 4,
+  frame: 2,
+  scale: 1,
+});
 
-  for (const cmd of cmds) {
-    if (cmd.type === 'move') {
-      player.applyCommand(cmd, cols, rows)
+const player1 = new Botonoid({
+  tileX: 5,
+  tileY: 5,
+  tileSize: TILE_SIZE,
+  sprite: goldSprite,
+});
+
+const player2 = new Botonoid({
+  tileX: 5,
+  tileY: 15,
+  tileSize: TILE_SIZE,
+  sprite: silverSprite,
+});
+
+// ------ Controllers ------
+const p1 = new KeyboardController(P1_KEYS);
+const p2 = new KeyboardController(P2_KEYS);
+
+function drivePlayer(controller: KeyboardController, player: Botonoid, dt: number) {
+
+  // buttons (action/changeItem/useItem) — Botonoid ignores for now, but you’ll later route these
+  for (const cmd of controller.consumeCommands()) {
+    player.applyCommand(cmd, cols, rows);
+  }
+
+  // movement intent: only start a move when idle
+  if (!player.isMoving()) {
+    const dir = controller.getMoveIntent();
+    if (dir) {
+      player.applyCommand({ type: 'move', dir }, cols, rows);
     }
   }
-  player.update(_dt);
+
+  player.update(dt);
+
+}
+
+const update = (_dt: number) => {
+  drivePlayer(p1, player1, _dt);
+  drivePlayer(p2, player2, _dt);
 };
 
 const render = () => {
@@ -70,7 +102,8 @@ const render = () => {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   tileMap.draw(ctx);
-  player.draw(ctx);
+  player1.draw(ctx);
+  player2.draw(ctx);
 }
 
 new GameLoop(update, render).start();

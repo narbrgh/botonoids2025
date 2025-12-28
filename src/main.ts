@@ -5,6 +5,9 @@ import { resources } from './Resources';
 import TileMap from './TileMap';
 import Botonoid from './Botonoid';
 
+
+import { TILE_SIZE, FRAME_SIZE} from './Constants';
+
 import KeyboardController from './KeyboardController';
 import { P1_KEYS, P2_KEYS } from './keymaps';
 import type { Command } from './commands';
@@ -18,9 +21,6 @@ if (!ctxEl) throw new Error('2D context not available');
 const ctx = ctxEl;
 
 ctx.imageSmoothingEnabled = false;
-
-const TILE_SIZE = 32;
-const FRAME_SIZE = 32;
 
 const cols = Math.floor(canvas.width / TILE_SIZE);
 const rows = Math.floor(canvas.height / TILE_SIZE);
@@ -60,6 +60,7 @@ const player1 = new Botonoid({
   tileY: 5,
   tileSize: TILE_SIZE,
   sprite: goldSprite,
+  tileActions: tileMap,
 });
 
 const player2 = new Botonoid({
@@ -67,6 +68,7 @@ const player2 = new Botonoid({
   tileY: 15,
   tileSize: TILE_SIZE,
   sprite: silverSprite,
+  tileActions: tileMap,
 });
 
 // ------ Controllers ------

@@ -1,9 +1,12 @@
 import Vector2 from './Vector2';
 import { Sprite } from './Sprite';
 import type { Command } from './commands';
+import { MOVE_DURATION_MS, MAX_TILES_COLOR_CHANGE } from './Constants';
+
+import type { TileActions, ColorChangeResult } from './TileMap';
 
 type Dir = 'up' | 'down' | 'left' | 'right';
-
+type BotonoidMode = 'normal' | 'colorChanging' | 'wallBuilding' | 'coolDown';
 
 
 type MoveState = {
@@ -22,17 +25,25 @@ export default class Botonoid {
   //direction facing
   private facing: Dir = 'down';
 
+  //mode
+  private mode: BotonoidMode = 'normal';
+  private numColorChanges: number = 0;
+  private cooldownMsRemaining = 0;
+
   // Pixel position (derived)
   readonly tileSize: number;
   readonly sprite: Sprite;
   
   private moveState: MoveState | null = null;
 
+  private readonly tiles: TileActions;
 
-  constructor(opts: { tileX: number; tileY: number; tileSize: number; sprite: Sprite }) {
+
+  constructor(opts: { tileX: number; tileY: number; tileSize: number; sprite: Sprite; tileActions: TileActions}) {
     this.tilePos = new Vector2(opts.tileX, opts.tileY);
     this.tileSize = opts.tileSize;
     this.sprite = opts.sprite;
+    this.tiles = opts.tileActions;
   }
 
   //lets main.ts (or others) know if the botonoid is moving or not
@@ -41,6 +52,8 @@ export default class Botonoid {
   }
 
   applyCommand(cmd: Command, cols: number, rows: number): void {
+    if (cmd.type === 'action') {this.handleAction(); return;}
+    
     if (cmd.type !== 'move') return; // for now, we are only programming move commands
 
     //ignore move commands while already moving
@@ -65,7 +78,7 @@ export default class Botonoid {
         fromPx,
         toPx,
         elapsedMs: 0,
-        durationMs: 500, // 1/2 second
+        durationMs: MOVE_DURATION_MS, // 1/2 second
         targetTile: new Vector2(nextTileX, nextTileY),
     };
   }
@@ -84,9 +97,27 @@ export default class Botonoid {
     this.moveState.elapsedMs += dtMs;
 
     if (this.moveState.elapsedMs >= this.moveState.durationMs) {
-        //commit the tile move at the end
-        this.tilePos.copy(this.moveState.targetTile);
-        this.moveState = null;
+      //commit the tile move at the end
+      this.tilePos.copy(this.moveState.targetTile);
+      this.moveState = null;
+
+      //check if mode is colorchanging, and, if so, try to change a color
+      if (this.getMode() === 'colorChanging') {
+        let result: ColorChangeResult = this.tiles.initiateColorChange(this.tilePos.clone()); // clone is nice to avoid accidental mutation
+        switch (result) {
+          case 'colorChangeSuccessful': this.decrementNumColorChanges();
+          case 'colorChangeUnsuccessfulDoNotDecrementNumber': break;
+          case 'colorChangeUnsuccessfulStillDecrementNumber': this.decrementNumColorChanges();
+        }
+      }
+    }
+  }
+
+  private decrementNumColorChanges(): void {
+    this.numColorChanges -= 1;
+    if (this.numColorChanges <= 0) {
+      //TODO enter cooldown
+      console.log("enter cooldown");
     }
   }
 
@@ -120,6 +151,28 @@ export default class Botonoid {
       case 'left': return { dx: -1, dy: 0 };
       case 'right': return { dx: 1, dy: 0 };
     }
+  }
+
+  //mode Getter
+  getMode(): BotonoidMode {
+    return this.mode;
+  }
+
+  private handleAction(): void {
+    console.log("handleAction");
+    switch (this.mode) {
+      case 'normal':
+        this.mode = 'colorChanging';
+        this.numColorChanges = MAX_TILES_COLOR_CHANGE;
+        return;
+      case 'wallBuilding':
+        this.tryToBuildWall();
+        return;
+    }
+  }
+
+  private tryToBuildWall(): void {
+    //TODO implement wall building logic
   }
  
 }

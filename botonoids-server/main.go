@@ -5,6 +5,7 @@ import (
 	"log"           // Provides logging utilities (log.Println, log.Printf, log.Fatal).
 	"net/http"      // Provides HTTP server functionality.
 	"sync/atomic"   // Provides low-level atomic operations. We use this to safely generate unique player IDs  across concurrent connections.
+	"time"
 
 	"github.com/gorilla/websocket" // Third-party WebSocket library. This handles the WebSocket protocol on top of HTTP.
 )
@@ -28,6 +29,125 @@ type ClientMsg struct {
 }
 
 // ─────────────────────────────
+// Command queue (Client → Tick loop)
+// ─────────────────────────────
+
+// QueuedCmd is one command received from a specific player.
+// For now, Cmd stays as raw JSON (we'll decode it later in the tick loop).
+type QueuedCmd struct {
+	PlayerID int
+	Seq      int
+	Cmd      json.RawMessage
+}
+
+// ------------------------------------
+// -- COMMAND STRUCTS -----------------
+// ----------------``-`-`-`--`-`-`-`-`-
+
+type MoveCmd struct {
+	Type string `json:"type"` // "move"
+	Dir  string `json:="dir"` // "up" | "down" | "left" | "right"
+}
+
+type FacingCmd struct {
+	Type string `json:"type"` // "facing"
+	Dir  string `json:="dir"` // "up" | "down" | "left" | "right"
+}
+
+type ActionCmd struct {
+	Type string `json:"type"` // "action"
+}
+
+type ChangeItemCmd struct {
+	Type string `json:"type"` // "changeItem"
+}
+
+type UseItemCmd struct {
+	Type string `json:"type"` // "useItem"
+}
+
+// cmdCh is the shared queue that all wsHandler goroutines push into.
+// The buffer (1024) prevents small bursts from immediately blocking reads.
+var cmdCh = make(chan QueuedCmd, 1024)
+
+// --------------------------------
+// Authoritative game loop (Tick) |
+// --------------------------------
+
+type GameState struct {
+	Tick uint64
+}
+
+func runGameLoop(state *GameState) {
+	const tickHz = 20
+	tickDur := time.Second / tickHz
+
+	ticker := time.NewTicker(tickDur)
+	defer ticker.Stop()
+
+	//Reuse a slice each tick to avoid allocating constantly
+	pending := make([]QueuedCmd, 0, 256)
+
+	for range ticker.C {
+		// Drain everything currently queued (non-blocking)
+		pending = pending[:0]
+
+	DRAIN:
+		for {
+			select {
+			case qc := <-cmdCh:
+				pending = append(pending, qc)
+			default:
+				break DRAIN //the DRAIN refers to the "for" loop. This break breaks out of that for
+			}
+		}
+
+		for _, qc := range pending {
+			// Peek at the "type" field
+			var kind struct {
+				Type string `json:"type"`
+			}
+
+			if err := json.Unmarshal(qc.Cmd, &kind); err != nil {
+				log.Printf("bad cmd json from player %d: %v", qc.PlayerID, err)
+				continue
+			}
+
+			switch kind.Type {
+			case "move":
+				var cmd MoveCmd
+				if err := json.Unmarshal(qc.Cmd, &cmd); err != nil {
+					log.Printf("bad move cmd: %v", err)
+					continue
+				}
+				log.Printf("[tick=%d] MOVE player=%d dir=%s", state.Tick, qc.PlayerID, cmd.Dir)
+			case "facing":
+				var cmd FacingCmd
+				if err := json.Unmarshal(qc.Cmd, &cmd); err != nil {
+					log.Printf("bad face cmd: %v", err)
+					continue
+				}
+				log.Printf("[tick=%d] FACE player=%d dir=%s", state.Tick, qc.PlayerID, cmd.Dir)
+			case "action":
+				log.Printf("[tick=%d] ACTION player=%d", state.Tick, qc.PlayerID)
+
+			case "changeItem":
+				log.Printf("[tick=%d] CHANGE_ITEM player=%d", state.Tick, qc.PlayerID)
+
+			case "useItem":
+				log.Printf("[tick=%d] USE_ITEM player=%d", state.Tick, qc.PlayerID)
+
+			default:
+				log.Printf("unknown cmd type %q", kind.Type)
+			}
+
+		}
+		state.Tick++
+	}
+
+}
+
+// ─────────────────────────────
 // WebSocket upgrader
 // ─────────────────────────────
 var upgrader = websocket.Upgrader{ // This function controls whether cross-origin WebSocket requests are allowed
@@ -43,9 +163,7 @@ var nextID int32 = 0 // Global counter used to assign unique player IDs. We use 
 // WebSocket handler
 // ─────────────────────────────
 func wsHandler(w http.ResponseWriter, r *http.Request) { // This func is called whenever a client connects to the /ws HTTP endpoint
-
 	c, err := upgrader.Upgrade(w, r, nil) // Converts ("upgrades") an HTTP connection into a Websocket connection. After this point, we are no longer doing HTTP
-
 	if err != nil {
 		log.Println("upgrade:", err) // If the upgrade fails, log the error and exit.
 		return
@@ -84,14 +202,14 @@ func wsHandler(w http.ResponseWriter, r *http.Request) { // This func is called 
 
 			return // Exit the handler, which closes the connection.
 		}
+		log.Printf("[ws] got msg from player=%d type=%s seq = %d cmd = %s", playerID, m.Type, m.Seq, string(m.Cmd))
 
-		log.Printf( // Log the received message. Note: m.Cmd is raw JSON bytes, so we convert it to string just for logging.
-			"recv playerId=%d type=%s seq=%d cmd=%s",
-			playerID,
-			m.Type,
-			m.Seq,
-			string(m.Cmd),
-		)
+		// Add the command to the "command queue" for the server to process once per "tick"
+		cmdCh <- QueuedCmd{
+			PlayerID: playerID,
+			Seq:      m.Seq,
+			Cmd:      m.Cmd,
+		}
 
 		_ = c.WriteJSON(ServerMsg{ // Send acknowledgement ("ack"). This confirms the receipt of the command, but does NOT mean that it was necessarily applied
 			Type:     "ack",
@@ -106,6 +224,9 @@ func wsHandler(w http.ResponseWriter, r *http.Request) { // This func is called 
 // Program entry point
 // ─────────────────────────────
 func main() {
+	state := &GameState{}
+	go runGameLoop(state)
+
 	http.HandleFunc("/ws", wsHandler) // Registers the wsHandler function to handle HTTP requests to the "/ws" path.
 
 	log.Println("server listening on http://localhost:8080") // Log that the server is starting.

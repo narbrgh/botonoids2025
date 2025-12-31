@@ -65,13 +65,14 @@ export default class Botonoid {
     if (this.moveState) return;
 
     this.facing = cmd.dir;
+    net.sendCommand({ type: 'facing', dir: cmd.dir }); //TODO later make this only send if the botonoid doesn't move (thus decreasing number of commands). Maybe move this into the "if" bounds check
     this.sprite.frame = Botonoid.dirToFrame(this.facing);
 
     const {dx, dy} = Botonoid.dirToDelta(cmd.dir);
     const nextTileX = this.tilePos.x + dx;
     const nextTileY = this.tilePos.y + dy;
 
-    // bounds check (later: collision check against tile map)
+    // bounds check (TODO collision check against tile map)
     if (nextTileX < 0 || nextTileX >= cols || nextTileY < 0 || nextTileY >= rows) {
         return;
     }
@@ -86,6 +87,8 @@ export default class Botonoid {
         durationMs: MOVE_DURATION_MS, // 1/2 second
         targetTile: new Vector2(nextTileX, nextTileY),
     };
+
+    net.sendCommand({type: "move", dir: cmd.dir});
   }
 
   private static dirToFrame(dir: Dir): number {
@@ -166,7 +169,7 @@ export default class Botonoid {
   private handleAction(): void {
     console.log("handleAction");
     net.sendCommand({ type: 'action' });
-    
+
     switch (this.mode) {
       case 'normal':
         this.mode = 'colorChanging';

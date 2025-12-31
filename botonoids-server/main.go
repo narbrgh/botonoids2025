@@ -44,14 +44,44 @@ type QueuedCmd struct {
 // -- COMMAND STRUCTS -----------------
 // ----------------``-`-`-`--`-`-`-`-`-
 
+type DirType string
+
+const (
+	Up    DirType = "up"
+	Down  DirType = "down"
+	Left  DirType = "left"
+	Right DirType = "right"
+)
+
+func isValidDir(d DirType) bool {
+	switch d {
+	case Up, Down, Left, Right:
+		return true
+	default:
+		return false
+	}
+}
+
 type MoveCmd struct {
-	Type string `json:"type"` // "move"
-	Dir  string `json:="dir"` // "up" | "down" | "left" | "right"
+	Type string  `json:"type"` // "move"
+	Dir  DirType `json:"dir"`  // "up" | "down" | "left" | "right"
+}
+
+func decodeMoveCmd(raw json.RawMessage) (MoveCmd, error) {
+	var cmd MoveCmd
+	err := json.Unmarshal(raw, &cmd)
+	return cmd, err
 }
 
 type FacingCmd struct {
-	Type string `json:"type"` // "facing"
-	Dir  string `json:="dir"` // "up" | "down" | "left" | "right"
+	Type string  `json:"type"` // "facing"
+	Dir  DirType `json:"dir"`  // "up" | "down" | "left" | "right"
+}
+
+func decodeFacingCmd(raw json.RawMessage) (FacingCmd, error) {
+	var cmd FacingCmd
+	err := json.Unmarshal(raw, &cmd)
+	return cmd, err
 }
 
 type ActionCmd struct {
@@ -70,6 +100,80 @@ type UseItemCmd struct {
 // The buffer (1024) prevents small bursts from immediately blocking reads.
 var cmdCh = make(chan QueuedCmd, 1024)
 
+// ------------0-0-0-0-0-0--------->
+// --------- DRAIN QUEUED COMMANDS -
+// -----:)-:)-:)--------------------
+
+func drainQueuedCmds(ch <-chan QueuedCmd, dst []QueuedCmd) []QueuedCmd {
+	for {
+		select {
+		case qc := <-ch:
+			dst = append(dst, qc)
+		default:
+			return dst
+		}
+	}
+}
+
+// ----------------------------  - -
+// --------PEEK AT CMD TYPE ---   --
+// ---------------------------------
+
+type cmdKind struct {
+	Type string `json:"type"`
+}
+
+func peekCmdType(raw json.RawMessage) (string, error) {
+	var k cmdKind
+	if err := json.Unmarshal(raw, &k); err != nil {
+		return "", err
+	}
+	return k.Type, nil
+}
+
+// --------------------------------
+// Apply queued command --------- |
+// --------------------------------
+
+func applyQueuedCmd(state *GameState, qc QueuedCmd) {
+	typ, err := peekCmdType(qc.Cmd)
+	if err != nil {
+		log.Printf("bad cmd json from player %d: %v", qc.PlayerID, err)
+		return
+	}
+
+	switch typ {
+
+	case "move":
+		cmd, err := decodeMoveCmd(qc.Cmd)
+		if err != nil || !isValidDir(cmd.Dir) {
+			log.Printf("invalid move cmd from player %d", qc.PlayerID)
+			return
+		}
+		log.Printf("[tick=%d] MOVE player=%d dir=%s", state.Tick, qc.PlayerID, cmd.Dir)
+
+	case "facing":
+		cmd, err := decodeFacingCmd(qc.Cmd)
+		if err != nil || !isValidDir(cmd.Dir) {
+			log.Printf("bad facing cmd from player %d: %v", qc.PlayerID, err)
+			return
+		}
+		log.Printf("[tick=%d] FACING player=%d dir=%s", state.Tick, qc.PlayerID, cmd.Dir)
+
+	case "action":
+		log.Printf("[tick=%d] ACTION player=%d", state.Tick, qc.PlayerID)
+
+	case "changeItem":
+		log.Printf("[tick=%d] CHANGE_ITEM player=%d", state.Tick, qc.PlayerID)
+
+	case "useItem":
+		log.Printf("[tick=%d] USE_ITEM player=%d", state.Tick, qc.PlayerID)
+
+	default:
+		log.Printf("unknown cmd type %q", typ)
+	}
+}
+
 // --------------------------------
 // Authoritative game loop (Tick) |
 // --------------------------------
@@ -85,66 +189,18 @@ func runGameLoop(state *GameState) {
 	ticker := time.NewTicker(tickDur)
 	defer ticker.Stop()
 
-	//Reuse a slice each tick to avoid allocating constantly
 	pending := make([]QueuedCmd, 0, 256)
 
 	for range ticker.C {
-		// Drain everything currently queued (non-blocking)
 		pending = pending[:0]
-
-	DRAIN:
-		for {
-			select {
-			case qc := <-cmdCh:
-				pending = append(pending, qc)
-			default:
-				break DRAIN //the DRAIN refers to the "for" loop. This break breaks out of that for
-			}
-		}
+		pending = drainQueuedCmds(cmdCh, pending)
 
 		for _, qc := range pending {
-			// Peek at the "type" field
-			var kind struct {
-				Type string `json:"type"`
-			}
-
-			if err := json.Unmarshal(qc.Cmd, &kind); err != nil {
-				log.Printf("bad cmd json from player %d: %v", qc.PlayerID, err)
-				continue
-			}
-
-			switch kind.Type {
-			case "move":
-				var cmd MoveCmd
-				if err := json.Unmarshal(qc.Cmd, &cmd); err != nil {
-					log.Printf("bad move cmd: %v", err)
-					continue
-				}
-				log.Printf("[tick=%d] MOVE player=%d dir=%s", state.Tick, qc.PlayerID, cmd.Dir)
-			case "facing":
-				var cmd FacingCmd
-				if err := json.Unmarshal(qc.Cmd, &cmd); err != nil {
-					log.Printf("bad face cmd: %v", err)
-					continue
-				}
-				log.Printf("[tick=%d] FACE player=%d dir=%s", state.Tick, qc.PlayerID, cmd.Dir)
-			case "action":
-				log.Printf("[tick=%d] ACTION player=%d", state.Tick, qc.PlayerID)
-
-			case "changeItem":
-				log.Printf("[tick=%d] CHANGE_ITEM player=%d", state.Tick, qc.PlayerID)
-
-			case "useItem":
-				log.Printf("[tick=%d] USE_ITEM player=%d", state.Tick, qc.PlayerID)
-
-			default:
-				log.Printf("unknown cmd type %q", kind.Type)
-			}
-
+			applyQueuedCmd(state, qc)
 		}
+
 		state.Tick++
 	}
-
 }
 
 // ─────────────────────────────

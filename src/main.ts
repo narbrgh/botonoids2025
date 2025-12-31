@@ -5,12 +5,11 @@ import { resources } from './Resources';
 import TileMap from './TileMap';
 import Botonoid from './Botonoid';
 
-
 import { TILE_SIZE, FRAME_SIZE} from './Constants';
 
 import KeyboardController from './KeyboardController';
 import { P1_KEYS, P2_KEYS } from './keymaps';
-import type { Command } from './commands';
+//import type { Command } from './commands';
 
 const canvasEl = document.getElementById('game');
 if (!(canvasEl instanceof HTMLCanvasElement)) throw new Error('Canvas #game not found');
@@ -100,7 +99,7 @@ const update = (_dt: number) => {
 };
 
 const render = () => {
-  ctx.fillStyle = '#1e66ff';
+  ctx.fillStyle = '#313642ff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   tileMap.draw(ctx);

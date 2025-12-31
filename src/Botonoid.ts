@@ -5,6 +5,11 @@ import { MOVE_DURATION_MS, MAX_TILES_COLOR_CHANGE } from './Constants';
 
 import type { TileActions, ColorChangeResult } from './TileMap';
 
+import NetClient from './net/NetClient';
+
+const net = new NetClient();
+net.connect();
+
 type Dir = 'up' | 'down' | 'left' | 'right';
 type BotonoidMode = 'normal' | 'colorChanging' | 'wallBuilding' | 'coolDown';
 
@@ -28,7 +33,7 @@ export default class Botonoid {
   //mode
   private mode: BotonoidMode = 'normal';
   private numColorChanges: number = 0;
-  private cooldownMsRemaining = 0;
+  //private cooldownMsRemaining = 0;
 
   // Pixel position (derived)
   readonly tileSize: number;
@@ -105,9 +110,9 @@ export default class Botonoid {
       if (this.getMode() === 'colorChanging') {
         let result: ColorChangeResult = this.tiles.initiateColorChange(this.tilePos.clone()); // clone is nice to avoid accidental mutation
         switch (result) {
-          case 'colorChangeSuccessful': this.decrementNumColorChanges();
+          case 'colorChangeSuccessful': this.decrementNumColorChanges(); break;
           case 'colorChangeUnsuccessfulDoNotDecrementNumber': break;
-          case 'colorChangeUnsuccessfulStillDecrementNumber': this.decrementNumColorChanges();
+          case 'colorChangeUnsuccessfulStillDecrementNumber': this.decrementNumColorChanges(); break;
         }
       }
     }
@@ -160,6 +165,8 @@ export default class Botonoid {
 
   private handleAction(): void {
     console.log("handleAction");
+    net.sendCommand({ type: 'action' });
+    
     switch (this.mode) {
       case 'normal':
         this.mode = 'colorChanging';

@@ -1,4 +1,5 @@
 import type { Command } from '../commands';
+import type { SnapshotMsg } from '../protocol';
 
 type HelloMsg = { type: 'hello'; playerId: number; msg?: string };
 
@@ -27,6 +28,11 @@ export default class NetClient {
         return;
       }
 
+      if (this.isSnapshotMsg(raw)) {
+        this.onSnapshot?.(raw);
+        return;
+      }
+
       console.log('[net] server msg', raw);
     });
 
@@ -44,7 +50,20 @@ export default class NetClient {
       (x as any).type === 'hello' &&
       typeof (x as any).playerId === 'number'
     );
+   }
+
+  private isSnapshotMsg(x: unknown): x is SnapshotMsg {
+    return (
+        typeof x === 'object' &&
+        x !== null &&
+        (x as any).type === 'snapshot' &&
+        typeof (x as any).tick === 'number' &&
+        Array.isArray((x as any).players)
+    );
   }
+
+  onSnapshot?: (s: SnapshotMsg) => void;
+
 
   sendCommand(cmd: Command) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;

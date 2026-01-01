@@ -1,9 +1,12 @@
+import NetClient from './net/NetClient';
+
 import { GameLoop } from './GameLoop';
 import { Sprite } from './Sprite';
 import Vector2 from './Vector2';
 import { resources } from './Resources';
 import TileMap from './TileMap';
 import Botonoid from './Botonoid';
+import type { SnapshotMsg } from './protocol'
 
 import { TILE_SIZE, FRAME_SIZE} from './Constants';
 
@@ -74,18 +77,62 @@ const player2 = new Botonoid({
 const p1 = new KeyboardController(P1_KEYS);
 const p2 = new KeyboardController(P2_KEYS);
 
+// ----- MAP of players ----
+
+const botsById = new Map<number, Botonoid>();
+
+function spriteForPlayer(id: number): Sprite {
+  // simplest: odd = gold, even = silver
+  return (id % 2 === 1) ? goldSprite : silverSprite;
+}
+
+const net = new NetClient();
+net.connect();
+
+net.onSnapshot = (s: SnapshotMsg) => {
+  const seen = new Set<number>();
+
+  for (const p of s.players) {
+    seen.add(p.id);
+
+    let bot = botsById.get(p.id);
+    if (!bot) {
+      bot = new Botonoid({
+        tileX: p.x,
+        tileY: p.y,
+        tileSize: TILE_SIZE,
+        sprite: spriteForPlayer(p.id), //TODO when lobby is implemented, allow players to choose their sprite
+        tileActions: tileMap,
+      });
+      botsById.set(p.id, bot);
+    }
+
+    bot.setAuthoritativeState(p.x, p.y, p.facing);
+  }
+
+  //optional: remove disconnected players
+  for (const [id] of botsById) {
+    if (!seen.has(id)) botsById.delete(id);
+  }
+};
+
+
+
 function drivePlayer(controller: KeyboardController, player: Botonoid, dt: number) {
 
   // buttons (action/changeItem/useItem) — Botonoid ignores for now, but you’ll later route these
   for (const cmd of controller.consumeCommands()) {
-    player.applyCommand(cmd, cols, rows);
+    net.sendCommand(cmd);
+    player.applyCommand(cmd, cols, rows);// optional local behavior for now
   }
 
   // movement intent: only start a move when idle
   if (!player.isMoving()) {
     const dir = controller.getMoveIntent();
     if (dir) {
-      player.applyCommand({ type: 'move', dir }, cols, rows);
+      const cmd = { type: 'move', dir } as const;
+      net.sendCommand(cmd);
+      player.applyCommand({ type: 'move', dir }, cols, rows); // optional local behavior for now
     }
   }
 
@@ -93,18 +140,29 @@ function drivePlayer(controller: KeyboardController, player: Botonoid, dt: numbe
 
 }
 
-const update = (_dt: number) => {
-  drivePlayer(p1, player1, _dt);
-  drivePlayer(p2, player2, _dt);
+const update = (dt: number) => {
+  // Only send commands; don't move local bots here.
+  for (const cmd of p1.consumeCommands()) {
+    net.sendCommand(cmd);
+  }
+
+  // movement intent
+  const dir = p1.getMoveIntent();
+  if (dir) net.sendCommand({ type: 'move', dir });
+
+  // no local player.update(dt) in authoritative mode (server owns state)
 };
+
 
 const render = () => {
   ctx.fillStyle = '#313642ff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   tileMap.draw(ctx);
-  player1.draw(ctx);
-  player2.draw(ctx);
+
+  for (const bot of botsById.values()) {
+    bot.draw(ctx);
+  }
 }
 
 new GameLoop(update, render).start();

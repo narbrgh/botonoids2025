@@ -5,14 +5,8 @@ import { MOVE_DURATION_MS, MAX_TILES_COLOR_CHANGE } from './Constants';
 
 import type { TileActions, ColorChangeResult } from './TileMap';
 
-import NetClient from './net/NetClient';
-
-const net = new NetClient();
-net.connect();
-
-type Dir = 'up' | 'down' | 'left' | 'right';
+import type {DirType} from './protocol'
 type BotonoidMode = 'normal' | 'colorChanging' | 'wallBuilding' | 'coolDown';
-
 
 type MoveState = {
     fromPx: Vector2;
@@ -28,7 +22,7 @@ export default class Botonoid {
   tilePos: Vector2;
 
   //direction facing
-  private facing: Dir = 'down';
+  private facing: DirType = 'down';
 
   //mode
   private mode: BotonoidMode = 'normal';
@@ -65,7 +59,6 @@ export default class Botonoid {
     if (this.moveState) return;
 
     this.facing = cmd.dir;
-    net.sendCommand({ type: 'facing', dir: cmd.dir }); //TODO later make this only send if the botonoid doesn't move (thus decreasing number of commands). Maybe move this into the "if" bounds check
     this.sprite.frame = Botonoid.dirToFrame(this.facing);
 
     const {dx, dy} = Botonoid.dirToDelta(cmd.dir);
@@ -87,11 +80,9 @@ export default class Botonoid {
         durationMs: MOVE_DURATION_MS, // 1/2 second
         targetTile: new Vector2(nextTileX, nextTileY),
     };
-
-    net.sendCommand({type: "move", dir: cmd.dir});
   }
 
-  private static dirToFrame(dir: Dir): number {
+  private static dirToFrame(dir: DirType): number {
     switch (dir) {
       case 'down': return 2;
       case 'left': return 1;
@@ -120,6 +111,12 @@ export default class Botonoid {
       }
     }
   }
+
+  setAuthoritativeState(tilePosIncomingX: number, tilePosIncomingY: number, facingIncoming: DirType) { //TODO change Dir to DirType (to match what it's called in the server main.go)
+    this.tilePos.set(tilePosIncomingX, tilePosIncomingY);
+    this.facing = facingIncoming;
+    this.sprite.frame = Botonoid.dirToFrame(this.facing);
+  } 
 
   private decrementNumColorChanges(): void {
     this.numColorChanges -= 1;
@@ -152,7 +149,7 @@ export default class Botonoid {
         
     }
   
-    private static dirToDelta(dir: 'up' | 'down' | 'left' | 'right'): { dx: number; dy: number } {
+    private static dirToDelta(dir: DirType): { dx: number; dy: number } {
     switch (dir) {
       case 'up': return { dx: 0, dy: -1 };
       case 'down': return { dx: 0, dy: 1 };
@@ -168,7 +165,6 @@ export default class Botonoid {
 
   private handleAction(): void {
     console.log("handleAction");
-    net.sendCommand({ type: 'action' });
 
     switch (this.mode) {
       case 'normal':

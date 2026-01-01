@@ -28,9 +28,9 @@ type ClientMsg struct {
 	Seq  int             `json:"seq,omitempty"` // Sequence number sent by the client. This can later be used for acknowledgments, ordering, or prediction reconciliation.
 }
 
-// ─────────────────────────────
+// ─────────────────────────────--------
 // Command queue (Client → Tick loop)
-// ─────────────────────────────
+// ─────────────────────────────--------
 
 // QueuedCmd is one command received from a specific player.
 // For now, Cmd stays as raw JSON (we'll decode it later in the tick loop).
@@ -94,6 +94,68 @@ type ChangeItemCmd struct {
 
 type UseItemCmd struct {
 	Type string `json:"type"` // "useItem"
+}
+
+// ------------------------------
+// ----- More STRUCTS -----------
+// ------------*_*_*_*_*_*-_-_-_-
+
+type Client struct {
+	PlayerID int
+	Conn     *websocket.Conn
+	Send     chan []byte // outbound messages (already encoded JSON)
+}
+
+type Register struct {
+	Client *Client
+}
+
+type Unregister struct {
+	PlayerID int
+}
+
+var regCh = make(chan Register, 32)
+var unregCh = make(chan Unregister, 32)
+
+type PlayerState struct {
+	ID     int     `json:"id"`
+	X      int     `json:"x"`
+	Y      int     `json:"y"`
+	Facing DirType `'json:"facing"`
+}
+
+type GameState struct {
+	Tick    uint64
+	Players map[int]*PlayerState
+}
+
+type SnapshotMsg struct {
+	Type    string         `json:"type"` // "snapshot"
+	Tick    uint64         `json:"tick"`
+	Players []*PlayerState `json:"players"`
+}
+
+// helper function to encode once
+func encodeSnapshot(state *GameState) ([]byte, error) {
+	players := make([]*PlayerState, 0, len(state.Players))
+	for _, p := range state.Players {
+		players = append(players, p)
+	}
+	msg := SnapshotMsg{Type: "snapshot", Tick: state.Tick, Players: players}
+	return json.Marshal(msg)
+}
+
+// helper function to send JSON
+func sendJSON(cl *Client, v any) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return
+	}
+	// Non-blocking send (drop if client is slow)
+	select {
+	case cl.Send <- b:
+	default: //TODO later can add code for errors/drops; for now keep it simple
+	}
 }
 
 // cmdCh is the shared queue that all wsHandler goroutines push into.
@@ -178,25 +240,60 @@ func applyQueuedCmd(state *GameState, qc QueuedCmd) {
 // Authoritative game loop (Tick) |
 // --------------------------------
 
-type GameState struct {
-	Tick uint64
-}
-
 func runGameLoop(state *GameState) {
 	const tickHz = 20
 	tickDur := time.Second / tickHz
-
 	ticker := time.NewTicker(tickDur)
 	defer ticker.Stop()
 
+	clients := make(map[int]*Client)
 	pending := make([]QueuedCmd, 0, 256)
 
 	for range ticker.C {
+
+		// 1) process register / unregister events (non-blocking)
+	REGDRAIN: //this REGDRAIN label allows the break later to break out of the for (rather than just the select)
+		for {
+			select {
+			case r := <-regCh:
+				clients[r.Client.PlayerID] = r.Client
+				//create player state if missing
+				if _, ok := state.Players[r.Client.PlayerID]; !ok {
+					state.Players[r.Client.PlayerID] = &PlayerState{
+						ID: r.Client.PlayerID, X: 5, Y: 5, Facing: "down",
+					}
+				}
+			case u := <-unregCh:
+				if cl, ok := clients[u.PlayerID]; ok {
+					close(cl.Send) // stop write goroutine
+					delete(clients, u.PlayerID)
+				}
+				delete(state.Players, u.PlayerID)
+			default:
+				break REGDRAIN
+			}
+		}
+
+		// 2) drain commands
 		pending = pending[:0]
 		pending = drainQueuedCmds(cmdCh, pending)
 
+		// 3) apply commands (authoritative)
 		for _, qc := range pending {
-			applyQueuedCmd(state, qc)
+			applyQueuedCmdToState(state, qc)
+		}
+
+		// 4) broadcase snapshot
+		b, err := encodeSnapshot(state)
+		if err == nil {
+			for _, cl := range clients {
+				//non-blocking send (drop if client is slow)
+				select {
+				case cl.Send <- b:
+				default:
+					//client is lagging; drop snapshot
+				}
+			}
 		}
 
 		state.Tick++
@@ -230,19 +327,46 @@ func wsHandler(w http.ResponseWriter, r *http.Request) { // This func is called 
 
 	playerID := int(atomic.AddInt32(&nextID, 1)) // Atomically increment nextID and return the new value. This guarantees unique player IDs even if two clients connect at the same time.
 
-	log.Printf("client connected, playerId=%d", playerID) // Log that a new client has connected.
+	// unregister should be deferred once, here
+	defer func() {
+		unregCh <- Unregister{PlayerID: playerID}
+	}()
+
+	client := &Client{
+		PlayerID: playerID,
+		Conn:     c,
+		Send:     make(chan []byte, 256),
+	}
+
+	// register client with the game loop
+	regCh <- Register{Client: client}
+
+	//  writer goroutine: send snapshots/msgs to the socket
+	go func() {
+		// If this goroutine exits, the connection should close.
+		// (Often you let wsHandler's defer do the close; either is fine.)
+		for msg := range client.Send {
+			if err := c.WriteMessage(websocket.TextMessage, msg); err != nil {
+				return
+			}
+		}
+	}()
 
 	// ─────────────────────────────
 	// Send initial "hello" message
 	// ─────────────────────────────
+
+	/* changed this WriteJSON to sendJSON -- apparently if we have WriteJSONs in numerous gofuncs at once, we can get two at the same time, which can make issues
 	_ = c.WriteJSON(ServerMsg{ // Sends a JSON message to the client. This assigns the client its player ID. The `_ =` means we are intentionally ignoring the returned error for now.
 		Type:     "hello",
 		PlayerID: playerID,
 		Msg:      "connected",
-	})
+	})*/
+
+	sendJSON(client, ServerMsg{Type: "hello", PlayerID: playerID, Msg: "connected"})
 
 	// ─────────────────────────────
-	// Main receive loop
+	// Main receive loop: receive commands and enqueue them
 	// ─────────────────────────────
 	for {
 		var m ClientMsg // Allocate a ClientMsg struct to hold the next message from the client.
@@ -267,12 +391,65 @@ func wsHandler(w http.ResponseWriter, r *http.Request) { // This func is called 
 			Cmd:      m.Cmd,
 		}
 
+		/* changing all write JSON calls to the sendJSON function (Gorilla Websockets doesn't want WriteJSON from multiple gofuncs, because if both arrive at once, it can cause issues)
 		_ = c.WriteJSON(ServerMsg{ // Send acknowledgement ("ack"). This confirms the receipt of the command, but does NOT mean that it was necessarily applied
 			Type:     "ack",
 			PlayerID: playerID,
 			Msg:      "got it",
-		})
+		})*/
+		sendJSON(client, ServerMsg{Type: "ack", PlayerID: playerID, Msg: "got it"})
 
+	}
+}
+
+// -------------------------------------
+// APPLY QUEUED CMD TO STATE -----------
+// ------ actually mutates player's state -----
+// ----------- AUTHORITATIVE SERVER ------
+//---------------------------------------
+
+func applyQueuedCmdToState(state *GameState, qc QueuedCmd) {
+	p, ok := state.Players[qc.PlayerID]
+	if !ok {
+		return
+	}
+
+	typ, err := peekCmdType(qc.Cmd)
+	if err != nil {
+		return
+	}
+
+	switch typ {
+	case "facing":
+		cmd, err := decodeFacingCmd(qc.Cmd)
+		if err != nil {
+			return
+		}
+		p.Facing = cmd.Dir // or just cmd.Dir if string
+
+	case "move":
+		cmd, err := decodeMoveCmd(qc.Cmd)
+		if err != nil {
+			return
+		}
+
+		// set facing regardless
+		p.Facing = cmd.Dir
+
+		// apply movement
+		switch string(cmd.Dir) {
+		case "up":
+			p.Y--
+		case "down":
+			p.Y++
+		case "left":
+			p.X--
+		case "right":
+			p.X++
+		}
+
+	case "action":
+		// for now, do nothing on server
 	}
 }
 
@@ -280,7 +457,9 @@ func wsHandler(w http.ResponseWriter, r *http.Request) { // This func is called 
 // Program entry point
 // ─────────────────────────────
 func main() {
-	state := &GameState{}
+	state := &GameState{
+		Players: make(map[int]*PlayerState),
+	}
 	go runGameLoop(state)
 
 	http.HandleFunc("/ws", wsHandler) // Registers the wsHandler function to handle HTTP requests to the "/ws" path.

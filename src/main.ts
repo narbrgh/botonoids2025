@@ -81,9 +81,16 @@ const p2 = new KeyboardController(P2_KEYS);
 
 const botsById = new Map<number, Botonoid>();
 
-function spriteForPlayer(id: number): Sprite {
+function spriteForPlayer(skin: 'gold' | 'silver'): Sprite {
   // simplest: odd = gold, even = silver
-  return (id % 2 === 1) ? goldSprite : silverSprite;
+  return new Sprite({
+    resource: skin === 'gold' ? resources.images.goldBot : resources.images.silverBot,
+    frameSize: new Vector2(32, 32),
+    hFrames:1,
+    vFrames:4,
+    frame: 2,
+    scale: 1,
+  });
 }
 
 const net = new NetClient();
@@ -101,7 +108,7 @@ net.onSnapshot = (s: SnapshotMsg) => {
         tileX: p.x,
         tileY: p.y,
         tileSize: TILE_SIZE,
-        sprite: spriteForPlayer(p.id), //TODO when lobby is implemented, allow players to choose their sprite
+        sprite: spriteForPlayer(p.id % 2 === 1 ? 'gold' : 'silver'), //TODO when lobby is implemented, allow players to choose their sprite
         tileActions: tileMap,
       });
       botsById.set(p.id, bot);

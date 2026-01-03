@@ -275,7 +275,10 @@ func runGameLoop(room *Room) {
 				//create player state if missing
 				if _, ok := room.Players[r.Client.PlayerID]; !ok {
 					room.Players[r.Client.PlayerID] = &PlayerState{
-						ID: r.Client.PlayerID, X: 5, Y: 5, Facing: Down,
+						ID:     r.Client.PlayerID,
+						X:      5 + (r.Client.PlayerID % 5),
+						Y:      5 + ((r.Client.PlayerID / 5) % 5),
+						Facing: Down,
 					}
 				}
 			case u := <-unregCh:

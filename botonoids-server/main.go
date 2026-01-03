@@ -121,27 +121,42 @@ type PlayerState struct {
 	ID     int     `json:"id"`
 	X      int     `json:"x"`
 	Y      int     `json:"y"`
-	Facing DirType `'json:"facing"`
+	Facing DirType `json:"facing"`
 }
 
-type GameState struct {
-	Tick    uint64
+// ROOM structs etc. For lobby code
+type Phase string
+
+const (
+	PhaseLobby     Phase = "lobby"
+	PhaseCountdown Phase = "countdown"
+	PhasePlaying   Phase = "playing"
+	PhaseFinished  Phase = "finished"
+)
+
+type Room struct {
+	ID    string
+	Tick  uint64
+	Phase Phase
+
+	Clients map[int]*Client
 	Players map[int]*PlayerState
 }
 
 type SnapshotMsg struct {
 	Type    string         `json:"type"` // "snapshot"
 	Tick    uint64         `json:"tick"`
+	Phase   Phase          `json:"phase"`
 	Players []*PlayerState `json:"players"`
 }
 
 // helper function to encode once
-func encodeSnapshot(state *GameState) ([]byte, error) {
-	players := make([]*PlayerState, 0, len(state.Players))
-	for _, p := range state.Players {
+func encodeSnapshot(room *Room) ([]byte, error) {
+	players := make([]*PlayerState, 0, len(room.Players))
+	for _, p := range room.Players {
 		players = append(players, p)
 	}
-	msg := SnapshotMsg{Type: "snapshot", Tick: state.Tick, Players: players}
+	msg := SnapshotMsg{Type: "snapshot", Tick: room.Tick, Phase: room.Phase, Players: players}
 	return json.Marshal(msg)
 }
 
@@ -196,7 +211,7 @@ func peekCmdType(raw json.RawMessage) (string, error) {
 // --------------------------------
 // Apply queued command --------- |
 // --------------------------------
-
+/*
 func applyQueuedCmd(state *GameState, qc QueuedCmd) {
 	typ, err := peekCmdType(qc.Cmd)
 	if err != nil {
@@ -235,19 +250,19 @@ func applyQueuedCmd(state *GameState, qc QueuedCmd) {
 		log.Printf("unknown cmd type %q", typ)
 	}
 }
+*/
 
 // --------------------------------
 // Authoritative game loop (Tick) |
 // --------------------------------
 
-func runGameLoop(state *GameState) {
+func runGameLoop(room *Room) {
 	const tickHz = 20
 	tickDur := time.Second / tickHz
 	ticker := time.NewTicker(tickDur)
 	defer ticker.Stop()
 
-	clients := make(map[int]*Client)
-	pending := make([]QueuedCmd, 0, 256)
+	pending := make([]QueuedCmd, 0, 256) // local, per-tick scratch buffer. pending queues. use this rather than making new one each tick, so that we don't keep allocating and unallocating memory.
 
 	for range ticker.C {
 
@@ -256,19 +271,19 @@ func runGameLoop(state *GameState) {
 		for {
 			select {
 			case r := <-regCh:
-				clients[r.Client.PlayerID] = r.Client
+				room.Clients[r.Client.PlayerID] = r.Client
 				//create player state if missing
-				if _, ok := state.Players[r.Client.PlayerID]; !ok {
-					state.Players[r.Client.PlayerID] = &PlayerState{
-						ID: r.Client.PlayerID, X: 5, Y: 5, Facing: "down",
+				if _, ok := room.Players[r.Client.PlayerID]; !ok {
+					room.Players[r.Client.PlayerID] = &PlayerState{
+						ID: r.Client.PlayerID, X: 5, Y: 5, Facing: Down,
 					}
 				}
 			case u := <-unregCh:
-				if cl, ok := clients[u.PlayerID]; ok {
+				if cl, ok := room.Clients[u.PlayerID]; ok {
 					close(cl.Send) // stop write goroutine
-					delete(clients, u.PlayerID)
+					delete(room.Clients, u.PlayerID)
 				}
-				delete(state.Players, u.PlayerID)
+				delete(room.Players, u.PlayerID)
 			default:
 				break REGDRAIN
 			}
@@ -280,13 +295,13 @@ func runGameLoop(state *GameState) {
 
 		// 3) apply commands (authoritative)
 		for _, qc := range pending {
-			applyQueuedCmdToState(state, qc)
+			applyQueuedCmdToRoom(room, qc)
 		}
 
 		// 4) broadcase snapshot
-		b, err := encodeSnapshot(state)
+		b, err := encodeSnapshot(room)
 		if err == nil {
-			for _, cl := range clients {
+			for _, cl := range room.Clients {
 				//non-blocking send (drop if client is slow)
 				select {
 				case cl.Send <- b:
@@ -296,7 +311,7 @@ func runGameLoop(state *GameState) {
 			}
 		}
 
-		state.Tick++
+		room.Tick++
 	}
 }
 
@@ -408,8 +423,8 @@ func wsHandler(w http.ResponseWriter, r *http.Request) { // This func is called 
 // ----------- AUTHORITATIVE SERVER ------
 //---------------------------------------
 
-func applyQueuedCmdToState(state *GameState, qc QueuedCmd) {
-	p, ok := state.Players[qc.PlayerID]
+func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
+	p, ok := room.Players[qc.PlayerID]
 	if !ok {
 		return
 	}
@@ -457,10 +472,15 @@ func applyQueuedCmdToState(state *GameState, qc QueuedCmd) {
 // Program entry point
 // ─────────────────────────────
 func main() {
-	state := &GameState{
+
+	room := &Room{
+		ID:      "default",
+		Phase:   PhaseLobby,
+		Clients: make(map[int]*Client),
 		Players: make(map[int]*PlayerState),
 	}
-	go runGameLoop(state)
+
+	go runGameLoop(room)
 
 	http.HandleFunc("/ws", wsHandler) // Registers the wsHandler function to handle HTTP requests to the "/ws" path.
 

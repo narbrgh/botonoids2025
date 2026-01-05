@@ -57,25 +57,8 @@ const silverSprite = new Sprite({
   scale: 1,
 });
 
-const player1 = new Botonoid({
-  tileX: 5,
-  tileY: 5,
-  tileSize: TILE_SIZE,
-  sprite: goldSprite,
-  tileActions: tileMap,
-});
-
-const player2 = new Botonoid({
-  tileX: 5,
-  tileY: 15,
-  tileSize: TILE_SIZE,
-  sprite: silverSprite,
-  tileActions: tileMap,
-});
-
 // ------ Controllers ------
-const p1 = new KeyboardController(P1_KEYS);
-const p2 = new KeyboardController(P2_KEYS);
+const p1 = new KeyboardController(P2_KEYS); // TODO make it make sense. currently lazily using P2_KEYS because those are arrow keys, instead of changing the file
 
 // ----- MAP of players ----
 
@@ -97,6 +80,7 @@ const net = new NetClient();
 net.connect();
 
 net.onSnapshot = (s: SnapshotMsg) => {
+  const receivedAtMs = performance.now()
   const seen = new Set<number>();
 
   for (const p of s.players) {
@@ -114,7 +98,7 @@ net.onSnapshot = (s: SnapshotMsg) => {
       botsById.set(p.id, bot);
     }
 
-    bot.setAuthoritativeState(p.x, p.y, p.facing);
+    bot.setAuthoritativeStateFromSnapshot(p, s.tick, receivedAtMs);
   }
 
   //optional: remove disconnected players
@@ -162,13 +146,15 @@ const update = (dt: number) => {
 
 
 const render = () => {
+  const nowMs = performance.now();
+
   ctx.fillStyle = '#313642ff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   tileMap.draw(ctx);
 
   for (const bot of botsById.values()) {
-    bot.draw(ctx);
+    bot.draw(ctx, nowMs);
   }
 }
 

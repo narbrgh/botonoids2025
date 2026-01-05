@@ -1,11 +1,11 @@
 import Vector2 from './Vector2';
 import { Sprite } from './Sprite';
 import type { Command } from './commands';
-import { MOVE_DURATION_MS, MAX_TILES_COLOR_CHANGE } from './Constants';
+import { MOVE_DURATION_MS, MAX_TILES_COLOR_CHANGE, SERVER_TICK_MS, SERVER_TICK_HZ } from './Constants';
 
 import type { TileActions, ColorChangeResult } from './TileMap';
 
-import type {DirType} from './protocol'
+import type {SnapshotPlayer, DirType} from './protocol'
 type BotonoidMode = 'normal' | 'colorChanging' | 'wallBuilding' | 'coolDown';
 
 type MoveState = {
@@ -36,6 +36,23 @@ export default class Botonoid {
   private moveState: MoveState | null = null;
 
   private readonly tiles: TileActions;
+
+  // authoritative move field (for the server to tell the Botonoid to start a "tilewalk")
+  private auth = {
+    x: 0,
+    y: 0,
+    facing: 'down' as DirType,
+    moving: false,
+    fromX: 0, fromY: 0,
+    toX: 0, toY: 0,
+    moveStartTick: 0,
+    moveDurTicks: 0,
+  };
+
+  private lastSnap = {
+    tick: 0,
+    receivedAtMs: 0,
+  };
 
 
   constructor(opts: { tileX: number; tileY: number; tileSize: number; sprite: Sprite; tileActions: TileActions}) {
@@ -112,10 +129,27 @@ export default class Botonoid {
     }
   }
 
-  setAuthoritativeState(tilePosIncomingX: number, tilePosIncomingY: number, facingIncoming: DirType) { //TODO change Dir to DirType (to match what it's called in the server main.go)
-    this.tilePos.set(tilePosIncomingX, tilePosIncomingY);
-    this.facing = facingIncoming;
+  setAuthoritativeStateFromSnapshot(p: SnapshotPlayer, snapTick: number, receivedAtMs: number) {
+    //store snapshot timing so we can estimate "current server tick"
+    this.lastSnap.tick = snapTick;
+    this.lastSnap.receivedAtMs = receivedAtMs;
+
+    this.auth.x = p.x;
+    this.auth.y = p.y;
+    this.auth.facing = p.facing;
+    this.auth.moving = p.moving;
+    this.auth.fromX = p.fromX;
+    this.auth.fromY = p.fromY;
+    this.auth.toX = p.toX;
+    this.auth.toY = p.toY;
+    this.auth.moveStartTick = p.moveStartTick;
+    this.auth.moveDurTicks = p.moveDurTicks;
+
+    this.facing = p.facing;
     this.sprite.frame = Botonoid.dirToFrame(this.facing);
+
+    //Do not teleport tilePos while moving; tilePos is just a base.
+    this.tilePos.set(p.x, p.y)
   } 
 
   private decrementNumColorChanges(): void {
@@ -132,19 +166,28 @@ export default class Botonoid {
     this.tilePos.y = Math.max(0, Math.min(rows - 1, this.tilePos.y));
   }
 
-  draw(ctx: CanvasRenderingContext2D): void {
-    const p = this.getDrawPx();
+  draw(ctx: CanvasRenderingContext2D, nowMs: number): void {
+    const p = this.getDrawPx(nowMs);
     this.sprite.drawImage(ctx, p.x, p.y);
   }
 
-  private getDrawPx(): Vector2 {
-    if (!this.moveState) {
-        return new Vector2(this.tilePos.x*this.tileSize, this.tilePos.y*this.tileSize); //TODO add grid offset
-    }   
+  private estimatedServerTick(nowMs: number): number {
+    const dt = nowMs - this.lastSnap.receivedAtMs;
+    return this.lastSnap.tick + dt / SERVER_TICK_MS;
+  }
+
+  private getDrawPx(nowMs: number): Vector2 {
+    if (!this.auth.moving) {
+        return new Vector2(this.auth.x*this.tileSize, this.auth.y*this.tileSize); //TODO add grid offset
+    }
+
+    const estTick = this.estimatedServerTick(nowMs);
+    const t = (estTick - this.auth.moveStartTick) / this.auth.moveDurTicks; // t is a number from 0 to 1 on how far into tile walk we are
+    const tt = Math.max(0, Math.min(1, t)); //tt is 1 but capped between 0 and 1 (inclusive)
     
-    const t = Math.max(0, Math.min(1, this.moveState.elapsedMs / this.moveState.durationMs));
-    const x = this.moveState.fromPx.x + (this.moveState.toPx.x - this.moveState.fromPx.x) * t;
-    const y = this.moveState.fromPx.y + (this.moveState.toPx.y - this.moveState.fromPx.y) * t;
+    const x = (this.auth.fromX + (this.auth.toX - this.auth.fromX) * tt) * this.tileSize; // TODO add grid offset
+    const y = (this.auth.fromY + (this.auth.toY - this.auth.fromY) * tt) * this.tileSize; // TODO add grid offset
+    
     return new Vector2(x, y);
         
     }

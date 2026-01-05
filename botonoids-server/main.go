@@ -10,6 +10,20 @@ import (
 	"github.com/gorilla/websocket" // Third-party WebSocket library. This handles the WebSocket protocol on top of HTTP.
 )
 
+// ---------00-0-0-0-0-0-0-0-0------
+// --- CONSTANTS -------000--0--00--
+// --00-0-0-0---------------00-0-0--
+
+const (
+	TickHz     = 20
+	MoveTicks  = 10 // 500 ms at 20 Hz -> 10 ticks (TODO: make this take in the Constants file movement speed)
+	WorldCols  = 30 // temporary bounds for now (TODO update this later)
+	WorldRows  = 16
+	SpawnBaseX = 6
+	SpawnBaseY = 6
+	SpawnCols  = 12
+)
+
 // ─────────────────────────────
 // Server → Client message shape
 // ─────────────────────────────
@@ -122,6 +136,14 @@ type PlayerState struct {
 	X      int     `json:"x"`
 	Y      int     `json:"y"`
 	Facing DirType `json:"facing"`
+
+	Moving        bool   `json:"moving"`
+	FromX         int    `json:"fromX"`
+	FromY         int    `json:"fromY"`
+	ToX           int    `json:"toX"`
+	ToY           int    `json:"toY"`
+	MoveStartTick uint64 `json:"moveStartTick"`
+	MoveDurTicks  uint64 `json:"moveDurTicks"`
 }
 
 // ROOM structs etc. For lobby code
@@ -274,11 +296,34 @@ func runGameLoop(room *Room) {
 				room.Clients[r.Client.PlayerID] = r.Client
 				//create player state if missing
 				if _, ok := room.Players[r.Client.PlayerID]; !ok {
+
+					spawnX := 1
+					spawnY := 1
+
+					switch r.Client.PlayerID { // spawn based on playerID
+					case 1:
+						spawnX = SpawnBaseX
+						spawnY = SpawnBaseY
+					case 2:
+						spawnX = WorldCols - SpawnBaseX
+						spawnY = WorldRows - SpawnBaseY
+					case 3:
+						spawnX = SpawnBaseX
+						spawnY = WorldRows - SpawnBaseY
+					case 4:
+						spawnX = WorldCols - SpawnBaseX
+						spawnY = SpawnBaseY
+					}
+
 					room.Players[r.Client.PlayerID] = &PlayerState{
 						ID:     r.Client.PlayerID,
-						X:      5 + (r.Client.PlayerID % 5),
-						Y:      5 + ((r.Client.PlayerID / 5) % 5),
+						X:      spawnX,
+						Y:      spawnY,
 						Facing: Down,
+						Moving: false,
+						FromX:  spawnX, FromY: spawnY, ToX: spawnX, ToY: spawnY,
+						MoveStartTick: room.Tick,
+						MoveDurTicks:  MoveTicks,
 					}
 				}
 			case u := <-unregCh:
@@ -301,7 +346,23 @@ func runGameLoop(room *Room) {
 			applyQueuedCmdToRoom(room, qc)
 		}
 
-		// 4) broadcase snapshot
+		// 4) advance any in-progress moves
+		for _, p := range room.Players {
+			if !p.Moving {
+				continue
+			}
+			if room.Tick-p.MoveStartTick >= p.MoveDurTicks {
+				//commit at end of move
+				p.X = p.ToX
+				p.Y = p.ToY
+				p.Moving = false
+				//keep From/To aligned
+				p.FromX, p.FromY = p.X, p.Y
+				p.ToX, p.ToY = p.X, p.Y
+			}
+		}
+
+		// 5) broadcase snapshot
 		b, err := encodeSnapshot(room)
 		if err == nil {
 			for _, cl := range room.Clients {
@@ -447,24 +508,41 @@ func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
 
 	case "move":
 		cmd, err := decodeMoveCmd(qc.Cmd)
-		if err != nil {
+		if err != nil || !isValidDir(cmd.Dir) {
+			return
+		}
+
+		//alraedy moving? ignore new move commands for now
+		if p.Moving {
 			return
 		}
 
 		// set facing regardless
 		p.Facing = cmd.Dir
 
-		// apply movement
-		switch string(cmd.Dir) {
-		case "up":
-			p.Y--
-		case "down":
-			p.Y++
-		case "left":
-			p.X--
-		case "right":
-			p.X++
+		nx, ny := p.X, p.Y
+		switch cmd.Dir {
+		case Up:
+			ny--
+		case Down:
+			ny++
+		case Left:
+			nx--
+		case Right:
+			nx++
 		}
+
+		//bounds (temporary) TODO update this code, including "collision"
+		if nx < 0 || nx >= WorldCols || ny < 0 || ny >= WorldRows {
+			return
+		}
+
+		// start movement
+		p.Moving = true
+		p.FromX, p.FromY = p.X, p.Y
+		p.ToX, p.ToY = nx, ny
+		p.MoveStartTick = room.Tick
+		p.MoveDurTicks = MoveTicks
 
 	case "action":
 		// for now, do nothing on server

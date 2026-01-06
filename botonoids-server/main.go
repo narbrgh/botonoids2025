@@ -16,7 +16,7 @@ import (
 
 const (
 	TickHz     = 20
-	MoveTicks  = 10 // 500 ms at 20 Hz -> 10 ticks (TODO: make this take in the Constants file movement speed)
+	MoveTicks  = 10 // 500 ms at 20 Hz -> 10 ticks. If you change this here, change in Constants.ts (TODO: make this take in the Constants file movement speed)
 	WorldCols  = 30 // temporary bounds for now (TODO update this later)
 	WorldRows  = 16
 	SpawnBaseX = 6

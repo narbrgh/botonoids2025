@@ -1,5 +1,5 @@
 //Core timing (milliseconds)
-export const MOVE_DURATION_MS = 500; // tile to tile movement
+export const MOVE_DURATION_MS = 500; // tile to tile movement. if you change here, change in main.go.
 export const COLOR_CHANGE_COOLDOWN_MS = 1000; //after you change 5 tiles, how long before you can enter color change mode again
 
 //Color-changing rules

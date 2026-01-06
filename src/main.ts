@@ -8,7 +8,7 @@ import TileMap from './TileMap';
 import Botonoid from './Botonoid';
 import type { SnapshotMsg } from './protocol'
 
-import { TILE_SIZE, FRAME_SIZE} from './Constants';
+import { TILE_SIZE, FRAME_SIZE, MOVE_DURATION_MS} from './Constants';
 
 import KeyboardController from './KeyboardController';
 import { P1_KEYS, P2_KEYS } from './keymaps';
@@ -131,17 +131,23 @@ function drivePlayer(controller: KeyboardController, player: Botonoid, dt: numbe
 
 }
 
+let nextMoveAllowedAtMs = 0;
+
 const update = (dt: number) => {
   // Only send commands; don't move local bots here.
   for (const cmd of p1.consumeCommands()) {
     net.sendCommand(cmd);
   }
 
+  // add a "throttle" so it only send move commands if it thinks it can move
+  const now = performance.now();
+  if (now < nextMoveAllowedAtMs) return;
+
   // movement intent
   const dir = p1.getMoveIntent();
   if (dir) net.sendCommand({ type: 'move', dir });
-
-  // no local player.update(dt) in authoritative mode (server owns state)
+  
+  nextMoveAllowedAtMs = now + MOVE_DURATION_MS;
 };
 
 

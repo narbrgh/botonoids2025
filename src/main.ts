@@ -133,7 +133,7 @@ function drivePlayer(controller: KeyboardController, player: Botonoid, dt: numbe
 
 }
 
-let nextMoveAllowedAtMs = 0;
+//let nextMoveAllowedAtMs = 0;
 
 let lastDir: DirType | null = null;
 

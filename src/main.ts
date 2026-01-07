@@ -10,6 +10,8 @@ import type { SnapshotMsg } from './protocol'
 
 import { TILE_SIZE, FRAME_SIZE, MOVE_DURATION_MS} from './Constants';
 
+import type { DirType, InputCmd } from './protocol';
+
 import KeyboardController from './KeyboardController';
 import { P1_KEYS, P2_KEYS } from './keymaps';
 //import type { Command } from './commands';
@@ -133,6 +135,19 @@ function drivePlayer(controller: KeyboardController, player: Botonoid, dt: numbe
 
 let nextMoveAllowedAtMs = 0;
 
+let lastDir: DirType | null = null;
+
+const update = () => {
+  for (const cmd of p1.consumeCommands()) net.sendCommand(cmd);
+
+  const dir = p1.getMoveIntent();          // DirType | null
+
+  if (dir !== lastDir) {
+    net.sendCommand({ type: 'input', dir });
+    lastDir = dir;
+  }
+};
+/*
 const update = (dt: number) => {
   // Only send commands; don't move local bots here.
   for (const cmd of p1.consumeCommands()) {
@@ -149,6 +164,7 @@ const update = (dt: number) => {
   
   nextMoveAllowedAtMs = now + MOVE_DURATION_MS;
 };
+*/
 
 
 const render = () => {

@@ -132,10 +132,11 @@ var regCh = make(chan Register, 32)
 var unregCh = make(chan Unregister, 32)
 
 type PlayerState struct {
-	ID     int     `json:"id"`
-	X      int     `json:"x"`
-	Y      int     `json:"y"`
-	Facing DirType `json:"facing"`
+	ID        int      `json:"id"`
+	X         int      `json:"x"`
+	Y         int      `json:"y"`
+	Facing    DirType  `json:"facing"`
+	IntentDir *DirType `json:"intentDir,omitempty"`
 
 	Moving        bool   `json:"moving"`
 	FromX         int    `json:"fromX"`
@@ -144,6 +145,17 @@ type PlayerState struct {
 	ToY           int    `json:"toY"`
 	MoveStartTick uint64 `json:"moveStartTick"`
 	MoveDurTicks  uint64 `json:"moveDurTicks"`
+}
+
+type InputCmd struct {
+	Type string   `json:"type"` // "input"
+	Dir  *DirType `json:"dir"`  // "up|down|left|right". nil = no input
+}
+
+func decodeInputCmd(raw json.RawMessage) (InputCmd, error) {
+	var cmd InputCmd
+	err := json.Unmarshal(raw, &cmd)
+	return cmd, err
 }
 
 // ROOM structs etc. For lobby code
@@ -362,7 +374,51 @@ func runGameLoop(room *Room) {
 			}
 		}
 
-		// 5) broadcase snapshot
+		// 5) use intentDir to start moves
+		for _, p := range room.Players {
+			// log only when relevant
+			if !p.Moving && p.IntentDir != nil {
+				log.Printf("[intent] tick=%d player=%d intent=%s", room.Tick, p.ID, *p.IntentDir)
+			}
+
+			if p.Moving {
+				continue
+			}
+			if p.IntentDir == nil {
+				continue
+			}
+			dir := *p.IntentDir
+
+			if !p.Moving { // turning happebns immediately, even if blocked
+				p.Facing = dir
+			}
+
+			// attempt to start move in p.IntentDir
+			nx, ny := p.X, p.Y
+			switch dir {
+			case Up:
+				ny--
+			case Down:
+				ny++
+			case Left:
+				nx--
+			case Right:
+				nx++
+			}
+
+			// bounds/collision check here; if blocked, do not start move
+			if nx < 0 || nx >= WorldCols || ny < 0 || ny >= WorldRows {
+				continue
+			}
+
+			p.Moving = true
+			p.FromX, p.FromY = p.X, p.Y
+			p.ToX, p.ToY = nx, ny
+			p.MoveStartTick = room.Tick
+			p.MoveDurTicks = MoveTicks
+		}
+
+		// 6) broadcase snapshot
 		b, err := encodeSnapshot(room)
 		if err == nil {
 			for _, cl := range room.Clients {
@@ -545,7 +601,33 @@ func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
 		p.MoveDurTicks = MoveTicks
 
 	case "action":
-		// for now, do nothing on server
+		// for now, do nothing on server. TODO add action
+
+	case "input":
+		cmd, err := decodeInputCmd(qc.Cmd)
+		if err != nil {
+			return
+		}
+
+		// allow "" to mean "no movement"
+		if cmd.Dir == nil {
+			p.IntentDir = nil
+			return
+		}
+
+		//validate
+		d := *cmd.Dir
+		if !isValidDir(d) {
+			return
+		}
+
+		//store intent
+		p.IntentDir = cmd.Dir
+
+		// also update facing immediately if you want:
+		if !p.Moving {
+			p.Facing = *cmd.Dir
+		}
 	}
 }
 

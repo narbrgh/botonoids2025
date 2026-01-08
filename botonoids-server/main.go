@@ -22,6 +22,7 @@ const (
 	SpawnBaseX = 6
 	SpawnBaseY = 6
 	SpawnCols  = 12
+	NewSeed    = 10 //TODO make random seed
 )
 
 // ─────────────────────────────
@@ -70,7 +71,7 @@ func makeConfig() ConfigMsg {
 		MaxTilesColorChange: 5,
 		TileSize:            32,
 
-		Seed: 10,
+		Seed: NewSeed,
 		Cols: WorldCols,
 		Rows: WorldRows,
 
@@ -394,7 +395,8 @@ func runGameLoop(room *Room) {
 				p.ToX, p.ToY = p.X, p.Y
 
 				if p.Mode == ColorChanging {
-
+					//need authoritative tileGrid in server before I can implement this
+					//note: colorchanging should take time (a fe seconds; should be tweakable), and the transition should be visually obvious and smooth
 				}
 			}
 		}
@@ -627,7 +629,12 @@ func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
 		p.MoveDurTicks = MoveTicks
 
 	case "action":
-		// for now, do nothing on server. TODO add action
+		// for now, do nothing on server. TODO finish adding action
+		switch p.Mode {
+		case Walking:
+			p.Mode = ColorChanging
+			p.NumColorChangesLeft = 5 //TODO make it not hardcoded
+		}
 
 	case "input":
 		cmd, err := decodeInputCmd(qc.Cmd)

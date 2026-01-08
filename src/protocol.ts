@@ -24,3 +24,16 @@ export type SnapshotMsg = {
   players: SnapshotPlayer[];
 };
 
+export type ConfigMsg = {
+  type: 'config';
+  tickHz: number;
+  moveTicks: number;
+  moveDurMs: number;
+  colorCooldownMs: number;
+  maxTilesColorChange: number;
+  tileSize: number;
+  seed: number;
+	cols: number;
+  rows: number;
+  configVersion: number;
+};

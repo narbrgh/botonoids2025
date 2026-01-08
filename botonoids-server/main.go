@@ -33,6 +33,51 @@ type ServerMsg struct {
 	Msg      string `json:"msg,omitempty"`      // Optional human-readable message.
 }
 
+// -----------------------------------
+// Server -> Client config message ---
+// ----------0-0-00-0-------=-=-=-=---
+
+type ConfigMsg struct {
+	Type string `json:"type"`
+
+	TickHz    int    `json:"tickHz"`
+	MoveTicks uint64 `json:"moveTicks"`
+
+	// gameplay knobs
+	MoveDurMs           int `json:"moveDurMs"`
+	ColorCooldownMs     int `json:"colorCooldownMs"`
+	MaxTilesColorChange int `json:"maxTileColorChange"`
+	TileSize            int `json:"tileSize"`
+
+	// world map
+	Seed uint32 `json:"seed,omitempty"`
+	Cols int    `json:"cols,omitempty"`
+	Rows int    `json:"rows,omitempty"`
+
+	//version
+	ConfigVersion int `json:"configVersion:"`
+}
+
+func makeConfig() ConfigMsg {
+	return ConfigMsg{
+		Type: "config",
+
+		TickHz:    TickHz,
+		MoveTicks: MoveTicks,
+
+		MoveDurMs:           int(MoveTicks) * 1000 / TickHz,
+		ColorCooldownMs:     1200, //example
+		MaxTilesColorChange: 5,
+		TileSize:            32,
+
+		Seed: 10,
+		Cols: WorldCols,
+		Rows: WorldRows,
+
+		ConfigVersion: 1,
+	}
+}
+
 // ─────────────────────────────
 // Client → Server message shape
 // ─────────────────────────────
@@ -65,6 +110,16 @@ const (
 	Down  DirType = "down"
 	Left  DirType = "left"
 	Right DirType = "right"
+)
+
+type ModeType string
+
+const (
+	Walking       ModeType = "walking"
+	ColorChanging ModeType = "colorchanging"
+	WallBuilding  ModeType = "wallbuilding"
+	Ghost         ModeType = "ghost"
+	Cooldown      ModeType = "cooldown"
 )
 
 func isValidDir(d DirType) bool {
@@ -145,6 +200,11 @@ type PlayerState struct {
 	ToY           int    `json:"toY"`
 	MoveStartTick uint64 `json:"moveStartTick"`
 	MoveDurTicks  uint64 `json:"moveDurTicks"`
+
+	// variables for logic on changing colors, building walls, etc
+	Mode                ModeType `json:"mode"`
+	NumColorChangesLeft int      `json:"numColorChangesLeft"`
+	NumWallsLeft        int      `json:"numWallsLeft"`
 }
 
 type InputCmd struct {
@@ -172,6 +232,8 @@ type Room struct {
 	ID    string
 	Tick  uint64
 	Phase Phase
+
+	Seed uint32
 
 	Clients map[int]*Client
 	Players map[int]*PlayerState
@@ -243,50 +305,6 @@ func peekCmdType(raw json.RawMessage) (string, error) {
 }
 
 // --------------------------------
-// Apply queued command --------- |
-// --------------------------------
-/*
-func applyQueuedCmd(state *GameState, qc QueuedCmd) {
-	typ, err := peekCmdType(qc.Cmd)
-	if err != nil {
-		log.Printf("bad cmd json from player %d: %v", qc.PlayerID, err)
-		return
-	}
-
-	switch typ {
-
-	case "move":
-		cmd, err := decodeMoveCmd(qc.Cmd)
-		if err != nil || !isValidDir(cmd.Dir) {
-			log.Printf("invalid move cmd from player %d", qc.PlayerID)
-			return
-		}
-		log.Printf("[tick=%d] MOVE player=%d dir=%s", state.Tick, qc.PlayerID, cmd.Dir)
-
-	case "facing":
-		cmd, err := decodeFacingCmd(qc.Cmd)
-		if err != nil || !isValidDir(cmd.Dir) {
-			log.Printf("bad facing cmd from player %d: %v", qc.PlayerID, err)
-			return
-		}
-		log.Printf("[tick=%d] FACING player=%d dir=%s", state.Tick, qc.PlayerID, cmd.Dir)
-
-	case "action":
-		log.Printf("[tick=%d] ACTION player=%d", state.Tick, qc.PlayerID)
-
-	case "changeItem":
-		log.Printf("[tick=%d] CHANGE_ITEM player=%d", state.Tick, qc.PlayerID)
-
-	case "useItem":
-		log.Printf("[tick=%d] USE_ITEM player=%d", state.Tick, qc.PlayerID)
-
-	default:
-		log.Printf("unknown cmd type %q", typ)
-	}
-}
-*/
-
-// --------------------------------
 // Authoritative game loop (Tick) |
 // --------------------------------
 
@@ -334,8 +352,11 @@ func runGameLoop(room *Room) {
 						Facing: Down,
 						Moving: false,
 						FromX:  spawnX, FromY: spawnY, ToX: spawnX, ToY: spawnY,
-						MoveStartTick: room.Tick,
-						MoveDurTicks:  MoveTicks,
+						MoveStartTick:       room.Tick,
+						MoveDurTicks:        MoveTicks,
+						Mode:                Walking,
+						NumColorChangesLeft: 0,
+						NumWallsLeft:        0,
 					}
 				}
 			case u := <-unregCh:
@@ -371,6 +392,10 @@ func runGameLoop(room *Room) {
 				//keep From/To aligned
 				p.FromX, p.FromY = p.X, p.Y
 				p.ToX, p.ToY = p.X, p.Y
+
+				if p.Mode == ColorChanging {
+
+				}
 			}
 		}
 
@@ -499,6 +524,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) { // This func is called 
 	})*/
 
 	sendJSON(client, ServerMsg{Type: "hello", PlayerID: playerID, Msg: "connected"})
+	sendJSON(client, makeConfig())
 
 	// ─────────────────────────────
 	// Main receive loop: receive commands and enqueue them
@@ -639,6 +665,7 @@ func main() {
 	room := &Room{
 		ID:      "default",
 		Phase:   PhaseLobby,
+		Seed:    uint32(time.Now().UnixNano()), // good enough for now //TODO make see better
 		Clients: make(map[int]*Client),
 		Players: make(map[int]*PlayerState),
 	}

@@ -109,6 +109,11 @@ net.onSnapshot = (s: SnapshotMsg) => {
   }
 };
 
+net.onConfig = (c) => {
+  console.log('server config', c); 
+  tileMap.rerollWithSeed(c.seed);
+}
+
 
 
 function drivePlayer(controller: KeyboardController, player: Botonoid, dt: number) {

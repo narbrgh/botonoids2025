@@ -1,5 +1,5 @@
 import type { Command } from '../commands';
-import type { SnapshotMsg } from '../protocol';
+import type { SnapshotMsg, ConfigMsg } from '../protocol';
 
 type HelloMsg = { type: 'hello'; playerId: number; msg?: string };
 
@@ -8,6 +8,7 @@ export default class NetClient {
   private seq = 0;
 
   playerId: number | null = null;
+  config: ConfigMsg | null = null;
 
   connect(url = 'ws://localhost:8080/ws') {
     this.ws = new WebSocket(url);
@@ -30,6 +31,12 @@ export default class NetClient {
 
       if (this.isSnapshotMsg(raw)) {
         this.onSnapshot?.(raw);
+        return;
+      }
+
+      if (this.isConfigMsg(raw)) {
+        this.config = raw;
+        this.onConfig?.(raw);
         return;
       }
 
@@ -63,6 +70,14 @@ export default class NetClient {
   }
 
   onSnapshot?: (s: SnapshotMsg) => void;
+  onConfig?: (c: ConfigMsg) => void;
+
+  private isConfigMsg(x: unknown): x is ConfigMsg {
+    return typeof x === 'object' && x !== null
+      && (x as any).type === 'config'
+      && typeof (x as any).tickHz === 'number'
+      && typeof (x as any).moveTicks === 'number';
+  }
 
 
   sendCommand(cmd: Command) {

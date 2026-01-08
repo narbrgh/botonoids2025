@@ -1,6 +1,7 @@
 import {Sprite} from './Sprite';
 import { NUMBER_OF_COLORS} from './Constants';
 import Vector2 from './Vector2';
+import { mulberry32 } from './rng';
 
 export type ColorChangeResult =
   | 'colorChangeSuccessful'
@@ -56,9 +57,30 @@ export default class TileMap {
         return out;
     }
 
+    private generateRandomTilesFromSeed(seed: number): number[][] {
+        
+        const rand = mulberry32(seed);
+        
+        const out: number[][] = [];
+        for (let r = 0; r < this.rows; r++) {
+            const row: number[] = [];
+            for (let c = 0; c < this.cols; c++) {
+                row.push(Math.floor(rand() * this.tileCount));
+            }
+            out.push(row)
+        }
+        return out;
+    }
+
     reroll(): void {
         this.tiles = this.generateRandomTiles();
     }
+
+    rerollWithSeed(seed: number): void {
+        this.tiles = this.generateRandomTilesFromSeed(seed);
+    }
+    
+
 
     initiateColorChange(tilePos: Vector2): ColorChangeResult {
 

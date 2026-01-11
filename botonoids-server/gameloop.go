@@ -5,13 +5,34 @@ import (
 	"time"
 )
 
+// cmdCh is the shared queue that all wsHandler goroutines push into.
+// The buffer (1024) prevents small bursts from immediately blocking reads.
+var cmdCh = make(chan QueuedCmd, 1024)
+
+// ------------0-0-0-0-0-0--------->
+// --------- DRAIN QUEUED COMMANDS -
+// -----:)-:)-:)--------------------
+
+func drainQueuedCmds(ch <-chan QueuedCmd, dst []QueuedCmd) []QueuedCmd {
+	for {
+		select {
+		case qc := <-ch:
+			dst = append(dst, qc)
+		default:
+			return dst
+		}
+	}
+}
+
+var regCh = make(chan Register, 32)
+var unregCh = make(chan Unregister, 32)
+
 // --------------------------------
 // Authoritative game loop (Tick) |
 // --------------------------------
 
 func runGameLoop(room *Room) {
-	const tickHz = 20
-	tickDur := time.Second / tickHz
+	tickDur := time.Second / time.Duration(TickHz)
 	ticker := time.NewTicker(tickDur)
 	defer ticker.Stop()
 

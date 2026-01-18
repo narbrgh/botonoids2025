@@ -24,6 +24,13 @@ export type SnapshotMsg = {
   players: SnapshotPlayer[];
 };
 
+export type TileChangeMsg = {
+ type: "tileChange";
+ x: number;
+ y: number;
+ index: number;
+}
+
 export type ConfigMsg = {
   type: 'config';
   tickHz: number;

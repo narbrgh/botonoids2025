@@ -111,6 +111,13 @@ type SnapshotMsg struct {
 	Players []*PlayerState `json:"players"`
 }
 
+type TileChangeMsg struct {
+	Type  string `json:"type"` // "tileChange"
+	X     int    `json:"x"`
+	Y     int    `json:"y"`
+	Index uint8  `json:"index"`
+}
+
 // helper function to encode once
 func encodeSnapshot(room *Room) ([]byte, error) {
 	players := make([]*PlayerState, 0, len(room.Players))

@@ -1,5 +1,5 @@
 import type { Command } from '../commands';
-import type { SnapshotMsg, ConfigMsg } from '../protocol';
+import type { SnapshotMsg, ConfigMsg, TileChangeMsg } from '../protocol';
 
 type HelloMsg = { type: 'hello'; playerId: number; msg?: string };
 
@@ -40,6 +40,11 @@ export default class NetClient {
         return;
       }
 
+      if (this.isTileChangeMsg(raw)) {
+        this.onTileChange?.(raw);
+        return;
+      }
+
       console.log('[net] server msg', raw);
     });
 
@@ -59,6 +64,17 @@ export default class NetClient {
     );
    }
 
+   private isTileChangeMsg(x: unknown): x is TileChangeMsg {
+    return (
+      typeof x === 'object' && x !== null &&
+      (x as any).type === 'tileChange' &&
+      typeof (x as any).x === 'number' &&
+      typeof (x as any).y === 'number' &&
+      typeof (x as any).index === 'number'
+    );
+
+   }
+
   private isSnapshotMsg(x: unknown): x is SnapshotMsg {
     return (
         typeof x === 'object' &&
@@ -71,6 +87,7 @@ export default class NetClient {
 
   onSnapshot?: (s: SnapshotMsg) => void;
   onConfig?: (c: ConfigMsg) => void;
+  onTileChange?: (m: TileChangeMsg) => void;
 
   private isConfigMsg(x: unknown): x is ConfigMsg {
     return typeof x === 'object' && x !== null
@@ -78,7 +95,6 @@ export default class NetClient {
       && typeof (x as any).tickHz === 'number'
       && typeof (x as any).moveTicks === 'number';
   }
-
 
   sendCommand(cmd: Command) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;

@@ -81,7 +81,8 @@ export default class TileMap {
     }
     
 
-
+    // TODO This function is deprecated, since the esrver will now pass all of these
+    
     initiateColorChange(tilePos: Vector2): ColorChangeResult {
 
         // if successful, return colorChangeSuccessful
@@ -104,6 +105,8 @@ export default class TileMap {
 
         return 'colorChangeSuccessful';
     }
+    
+
 
     isTileAFoundationWallOrFlower(tilePos: Vector2): boolean {
         let index = this.getTileIndex(tilePos);

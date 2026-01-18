@@ -18,3 +18,11 @@ func NewTileMap(cols, rows int, seed int64) *TileMap {
 	}
 	return &TileMap{Cols: cols, Rows: rows, Tiles: t}
 }
+
+func (tm *TileMap) SetTile(x, y int, index uint8) bool {
+	if x < 0 || x >= tm.Cols || y < 0 || y >= tm.Rows {
+		return false
+	}
+	tm.Tiles[y][x] = index
+	return true
+}

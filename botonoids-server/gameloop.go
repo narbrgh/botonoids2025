@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"time"
 )
@@ -30,6 +31,16 @@ var unregCh = make(chan Unregister, 32)
 // --------------------------------
 // Authoritative game loop (Tick) |
 // --------------------------------
+
+func broadcast(room *Room, msg []byte) {
+	for _, cl := range room.Clients {
+		select {
+		case cl.Send <- msg:
+		default:
+			//drop if client is slow
+		}
+	}
+}
 
 func runGameLoop(room *Room) {
 	tickDur := time.Second / time.Duration(TickHz)
@@ -117,7 +128,16 @@ func runGameLoop(room *Room) {
 
 				if p.Mode == ColorChanging {
 					//need authoritative tileGrid in server before I can implement this
-					//note: colorchanging should take time (a fe seconds; should be tweakable), and the transition should be visually obvious and smooth
+					//note: colorchanging should take time (a few seconds; should be tweakable), and the transition should be visually obvious and smooth
+					if room.Map.SetTile(p.X, p.Y, 0) {
+						msg := TileChangeMsg{Type: "tileChange", X: p.X, Y: p.Y, Index: 0}
+						if b, err := json.Marshal(msg); err == nil {
+							broadcast(room, b)
+						}
+					}
+
+					// now call broadcast and send the message
+
 				}
 			}
 		}

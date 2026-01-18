@@ -109,6 +109,7 @@ export default class Botonoid {
   }
 
   update(dtMs: number): void {
+    console.log("update in botonoid");
     if (!this.moveState) return;
     this.moveState.elapsedMs += dtMs;
 
@@ -118,6 +119,7 @@ export default class Botonoid {
       this.moveState = null;
 
       //check if mode is colorchanging, and, if so, try to change a color
+      console.log("Checking color change");
       if (this.getMode() === 'colorChanging') {
         let result: ColorChangeResult = this.tiles.initiateColorChange(this.tilePos.clone()); // clone is nice to avoid accidental mutation
         switch (result) {

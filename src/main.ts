@@ -6,7 +6,7 @@ import Vector2 from './Vector2';
 import { resources } from './Resources';
 import TileMap from './TileMap';
 import Botonoid from './Botonoid';
-import type { SnapshotMsg } from './protocol'
+import type { SnapshotMsg, TileChangeMsg } from './protocol'
 
 import { TILE_SIZE, FRAME_SIZE, MOVE_DURATION_MS} from './Constants';
 
@@ -108,6 +108,10 @@ net.onSnapshot = (s: SnapshotMsg) => {
     if (!seen.has(id)) botsById.delete(id);
   }
 };
+
+net.onTileChange = (m: TileChangeMsg) => {
+  tileMap.setTileIndex(new Vector2(m.x, m.y), m.index);
+}
 
 net.onConfig = (c) => {
   console.log('server config', c); 

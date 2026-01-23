@@ -131,7 +131,7 @@ export default class Botonoid {
     }
   }
 
-  setAuthoritativeStateFromSnapshot(p: SnapshotPlayer, snapTick: number, receivedAtMs: number) {
+  setAuthoritativeStateFromPlayerSnapshot(p: SnapshotPlayer, snapTick: number, receivedAtMs: number) {
     //store snapshot timing so we can estimate "current server tick"
     this.lastSnap.tick = snapTick;
     this.lastSnap.receivedAtMs = receivedAtMs;

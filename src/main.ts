@@ -6,7 +6,7 @@ import Vector2 from './Vector2';
 import { resources } from './Resources';
 import TileMap from './TileMap';
 import Botonoid from './Botonoid';
-import type { SnapshotMsg, TileChangeMsg } from './protocol'
+import type { PlayerSnapshotMsg, TileChangeMsg } from './protocol'
 
 import { TILE_SIZE, FRAME_SIZE, MOVE_DURATION_MS} from './Constants';
 
@@ -81,7 +81,7 @@ function spriteForPlayer(skin: 'gold' | 'silver'): Sprite {
 const net = new NetClient();
 net.connect();
 
-net.onSnapshot = (s: SnapshotMsg) => {
+net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
   const receivedAtMs = performance.now()
   const seen = new Set<number>();
 
@@ -100,7 +100,7 @@ net.onSnapshot = (s: SnapshotMsg) => {
       botsById.set(p.id, bot);
     }
 
-    bot.setAuthoritativeStateFromSnapshot(p, s.tick, receivedAtMs);
+    bot.setAuthoritativeStateFromPlayerSnapshot(p, s.tick, receivedAtMs);
   }
 
   //optional: remove disconnected players

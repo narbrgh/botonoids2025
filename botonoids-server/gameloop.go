@@ -136,8 +136,6 @@ func runGameLoop(room *Room) {
 						}
 					}
 
-					// now call broadcast and send the message
-
 				}
 			}
 		}
@@ -187,16 +185,8 @@ func runGameLoop(room *Room) {
 		}
 
 		// 6) broadcase snapshot
-		b, err := encodeSnapshot(room)
-		if err == nil {
-			for _, cl := range room.Clients {
-				//non-blocking send (drop if client is slow)
-				select {
-				case cl.Send <- b:
-				default:
-					//client is lagging; drop snapshot
-				}
-			}
+		if b, err := encodeSnapshot(room); err == nil {
+			broadcast(room, b)
 		}
 
 		room.Tick++

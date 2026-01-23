@@ -1,5 +1,5 @@
 import type { Command } from '../commands';
-import type { SnapshotMsg, ConfigMsg, TileChangeMsg } from '../protocol';
+import type { PlayerSnapshotMsg, ConfigMsg, TileChangeMsg } from '../protocol';
 
 type HelloMsg = { type: 'hello'; playerId: number; msg?: string };
 
@@ -29,8 +29,8 @@ export default class NetClient {
         return;
       }
 
-      if (this.isSnapshotMsg(raw)) {
-        this.onSnapshot?.(raw);
+      if (this.isPlayerSnapshotMsg(raw)) {
+        this.onPlayerSnapshot?.(raw);
         return;
       }
 
@@ -75,7 +75,7 @@ export default class NetClient {
 
    }
 
-  private isSnapshotMsg(x: unknown): x is SnapshotMsg {
+  private isPlayerSnapshotMsg(x: unknown): x is PlayerSnapshotMsg {
     return (
         typeof x === 'object' &&
         x !== null &&
@@ -85,7 +85,7 @@ export default class NetClient {
     );
   }
 
-  onSnapshot?: (s: SnapshotMsg) => void;
+  onPlayerSnapshot?: (s: PlayerSnapshotMsg) => void;
   onConfig?: (c: ConfigMsg) => void;
   onTileChange?: (m: TileChangeMsg) => void;
 

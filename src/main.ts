@@ -6,7 +6,7 @@ import Vector2 from './Vector2';
 import { resources } from './Resources';
 import TileMap from './TileMap';
 import Botonoid from './Botonoid';
-import type { PlayerSnapshotMsg, TileChangeMsg } from './protocol'
+import type { PlayerSnapshotMsg, TileChangeMsg , TileInitiateChangeMsg} from './protocol'
 
 import { TILE_SIZE, FRAME_SIZE, MOVE_DURATION_MS} from './Constants';
 
@@ -14,6 +14,7 @@ import type { DirType, InputCmd } from './protocol';
 
 import KeyboardController from './KeyboardController';
 import { P1_KEYS, P2_KEYS } from './keymaps';
+import ServerClock from './ServerClock';
 //import type { Command } from './commands';
 
 const canvasEl = document.getElementById('game');
@@ -38,7 +39,10 @@ const tileSprite = new Sprite({
   scale: TILE_SIZE / FRAME_SIZE, // keep this an integer for pixel art
 });
 
-const tileMap = new TileMap({cols, rows, tileSize: TILE_SIZE, tileSprite });
+const clock = new ServerClock();
+
+const getEstimatedTick = clock.estimatedTick.bind(clock);
+const tileMap = new TileMap({cols, rows, tileSize: TILE_SIZE, tileSprite, getEstimatedTick });
 
 // Players
 const goldSprite = new Sprite({
@@ -96,11 +100,14 @@ net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
         tileSize: TILE_SIZE,
         sprite: spriteForPlayer(p.id % 2 === 1 ? 'gold' : 'silver'), //TODO when lobby is implemented, allow players to choose their sprite
         tileActions: tileMap,
+        getEstimatedTick,
       });
       botsById.set(p.id, bot);
     }
 
-    bot.setAuthoritativeStateFromPlayerSnapshot(p, s.tick, receivedAtMs);
+    bot.setAuthoritativeStateFromPlayerSnapshot(p);
+
+    clock.updateSnapshot(s.tick, receivedAtMs);
   }
 
   //optional: remove disconnected players
@@ -113,10 +120,17 @@ net.onTileChange = (m: TileChangeMsg) => {
   tileMap.setTileIndex(new Vector2(m.x, m.y), m.index);
 }
 
+net.onTileInitiateChange = (m: TileInitiateChangeMsg) => {
+  console.log("about to call setauthoritativeinitiatecolorchange");
+  tileMap.setAuthoritativeInitiateColorChange(new Vector2(m.x, m.y), m.toIndex, m.tileChangeStartTick, m.tileChangeDurTicks);
+}
+
 net.onConfig = (c) => {
   console.log('server config', c); 
   tileMap.rerollWithSeed(c.seed);
+  clock.updateConfig(c.tickHz);
 }
+
 
 
 
@@ -182,7 +196,7 @@ const render = () => {
   ctx.fillStyle = '#313642ff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  tileMap.draw(ctx);
+  tileMap.draw(ctx, nowMs);
 
   for (const bot of botsById.values()) {
     bot.draw(ctx, nowMs);

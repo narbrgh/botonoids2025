@@ -25,6 +25,14 @@ func drainQueuedCmds(ch <-chan QueuedCmd, dst []QueuedCmd) []QueuedCmd {
 	}
 }
 
+type ColorChangeResult int
+
+const (
+	ColorChangeSuccessful                 ColorChangeResult = iota
+	ColorChangeUnsuccessfulStillDecrement ColorChangeResult = iota
+	ColorChangeUnsuccessfulDoNotDecrement ColorChangeResult = iota
+)
+
 var regCh = make(chan Register, 32)
 var unregCh = make(chan Unregister, 32)
 
@@ -127,12 +135,23 @@ func runGameLoop(room *Room) {
 				p.ToX, p.ToY = p.X, p.Y
 
 				if p.Mode == ColorChanging {
-					//need authoritative tileGrid in server before I can implement this
-					//note: colorchanging should take time (a few seconds; should be tweakable), and the transition should be visually obvious and smooth
-					if room.Map.SetTile(p.X, p.Y, 0) {
-						msg := TileChangeMsg{Type: "tileChange", X: p.X, Y: p.Y, Index: 0}
-						if b, err := json.Marshal(msg); err == nil {
-							broadcast(room, b)
+					r := CheckColorChangeResult(p.X, p.Y, room.Map)
+
+					if r == ColorChangeSuccessful {
+
+						//set i to be what color it changes to;
+						// then tell the server TileMap about the initiateChange;
+						// then broadcast msg to Client about the InitiateChange
+
+						i, ok := room.Map.GetTileIndexAfterColorChange(p.X, p.Y)
+
+						if ok {
+							TileMapInitiateColorChange(room.Map, p.X, p.Y, i, room.Tick, ColorChangeTicks)
+							msg := TileInitiateChangeMsg{Type: "tileInitiateChange", X: p.X, Y: p.Y, ToIndex: i, TileChangeStartTick: room.Tick, TileChangeDurTicks: ColorChangeTicks}
+
+							if b, err := json.Marshal(msg); err == nil {
+								broadcast(room, b)
+							}
 						}
 					}
 

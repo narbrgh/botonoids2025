@@ -73,5 +73,25 @@ export class Sprite {
       x, y, fw * this.scale, fh * this.scale
     );
   }
+
+  drawImageWithOpacity(ctx: CanvasRenderingContext2D, x: number, y: number, alpha: number): void {
+    if (!this.resource.isLoaded) return;
+
+    const frame = this.frameMap.get(this.frame);
+    const sx = frame?.x ?? 0;
+    const sy = frame?.y ?? 0;
+
+    const fw = this.frameSize.x;
+    const fh = this.frameSize.y;
+    ctx.globalAlpha = alpha;
+
+    ctx.drawImage(
+      this.resource.image,
+      sx, sy, fw, fh,
+      x, y, fw * this.scale, fh * this.scale
+    );
+
+    ctx.globalAlpha = 1;
+  }
 }
 ``

@@ -17,7 +17,7 @@ export type SnapshotPlayer = {
   moveDurTicks: number;
 };
 
-export type SnapshotMsg = {
+export type PlayerSnapshotMsg = {
   type: 'snapshot';
   tick: number;
   phase: 'lobby' | 'countdown' | 'playing' | 'finished';
@@ -29,6 +29,15 @@ export type TileChangeMsg = {
  x: number;
  y: number;
  index: number;
+}
+
+export type TileInitiateChangeMsg = {
+  type: "tileInitiateChange";
+  x: number;
+  y: number;
+  toIndex: number;
+  tileChangeStartTick: number;
+  tileChangeDurTicks: number;
 }
 
 export type ConfigMsg = {

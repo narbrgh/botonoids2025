@@ -118,6 +118,15 @@ type TileChangeMsg struct {
 	Index uint8  `json:"index"`
 }
 
+type TileInitiateChangeMsg struct {
+	Type                string `json:"type"` // "tileInitiateChange"
+	X                   int    `json:"x"`
+	Y                   int    `json:"y"`
+	ToIndex             uint8  `json:"toIndex"`
+	TileChangeStartTick uint64 `json:"tileChangeStartTick"`
+	TileChangeDurTicks  uint64 `json:"tileChangeDurTicks"`
+}
+
 // helper function to encode once
 func encodeSnapshot(room *Room) ([]byte, error) {
 	players := make([]*PlayerState, 0, len(room.Players))

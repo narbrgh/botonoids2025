@@ -6,6 +6,9 @@ import { MOVE_DURATION_MS, MAX_TILES_COLOR_CHANGE, SERVER_TICK_MS, SERVER_TICK_H
 import type { TileActions, ColorChangeResult } from './TileMap';
 
 import type {SnapshotPlayer, DirType} from './protocol'
+
+
+
 type BotonoidMode = 'normal' | 'colorChanging' | 'wallBuilding' | 'coolDown';
 
 type MoveState = {
@@ -36,6 +39,8 @@ export default class Botonoid {
   private moveState: MoveState | null = null;
 
   private readonly tiles: TileActions;
+  private readonly getEstimatedTick: (nowMs: number) => number;
+
 
   // authoritative move field (for the server to tell the Botonoid to start a "tilewalk")
   private auth = {
@@ -49,17 +54,12 @@ export default class Botonoid {
     moveDurTicks: 0,
   };
 
-  private lastSnap = {
-    tick: 0,
-    receivedAtMs: 0,
-  };
-
-
-  constructor(opts: { tileX: number; tileY: number; tileSize: number; sprite: Sprite; tileActions: TileActions}) {
+  constructor(opts: { tileX: number; tileY: number; tileSize: number; sprite: Sprite; tileActions: TileActions; getEstimatedTick: (nowMs: number) => number}) {
     this.tilePos = new Vector2(opts.tileX, opts.tileY);
     this.tileSize = opts.tileSize;
     this.sprite = opts.sprite;
     this.tiles = opts.tileActions;
+    this.getEstimatedTick = opts.getEstimatedTick;
   }
 
   //lets main.ts (or others) know if the botonoid is moving or not
@@ -131,11 +131,8 @@ export default class Botonoid {
     }
   }
 
-  setAuthoritativeStateFromPlayerSnapshot(p: SnapshotPlayer, snapTick: number, receivedAtMs: number) {
+  setAuthoritativeStateFromPlayerSnapshot(p: SnapshotPlayer) {
     //store snapshot timing so we can estimate "current server tick"
-    this.lastSnap.tick = snapTick;
-    this.lastSnap.receivedAtMs = receivedAtMs;
-
     this.auth.x = p.x;
     this.auth.y = p.y;
     this.auth.facing = p.facing;
@@ -173,17 +170,13 @@ export default class Botonoid {
     this.sprite.drawImage(ctx, p.x, p.y);
   }
 
-  private estimatedServerTick(nowMs: number): number {
-    const dt = nowMs - this.lastSnap.receivedAtMs;
-    return this.lastSnap.tick + dt / SERVER_TICK_MS;
-  }
 
   private getDrawPx(nowMs: number): Vector2 {
     if (!this.auth.moving) {
         return new Vector2(this.auth.x*this.tileSize, this.auth.y*this.tileSize); //TODO add grid offset
     }
 
-    const estTick = this.estimatedServerTick(nowMs);
+    const estTick = this.getEstimatedTick(nowMs);
     const t = (estTick - this.auth.moveStartTick) / this.auth.moveDurTicks; // t is a number from 0 to 1 on how far into tile walk we are
     const tt = Math.max(0, Math.min(1, t)); //tt is 1 but capped between 0 and 1 (inclusive)
     
@@ -192,9 +185,9 @@ export default class Botonoid {
     
     return new Vector2(x, y);
         
-    }
+  }
   
-    private static dirToDelta(dir: DirType): { dx: number; dy: number } {
+  private static dirToDelta(dir: DirType): { dx: number; dy: number } {
     switch (dir) {
       case 'up': return { dx: 0, dy: -1 };
       case 'down': return { dx: 0, dy: 1 };

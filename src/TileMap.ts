@@ -8,6 +8,13 @@ export type ColorChangeResult =
   | 'colorChangeUnsuccessfulStillDecrementNumber'
   | 'colorChangeUnsuccessfulDoNotDecrementNumber';
 
+ type Tile = {
+    index: number;
+    changing: boolean;
+    tileChangeStartTick: number;
+    tileChangeDurTicks: number;
+}
+
 export interface TileActions {
   initiateColorChange(tilePos: Vector2): ColorChangeResult;
 }
@@ -18,19 +25,24 @@ export default class TileMap {
     readonly tileSize: number;
 
     private readonly tileCount: number = 5; 
-    private tiles: number[][];
+    private tiles: Tile[][];
     private readonly tileSprite: Sprite;
+
+    private readonly getEstimatedTick: (nowMs: number) => number;
 
     constructor(opts: {
         cols: number;
         rows: number;
         tileSize: number;
         tileSprite: Sprite;
+        getEstimatedTick: (nowMs: number) => number;
     }) {
         this.cols = opts.cols;
         this.rows = opts.rows;
         this.tileSize = opts.tileSize;
         this.tileSprite = opts.tileSprite;
+
+        this.getEstimatedTick = opts.getEstimatedTick;
 
         this.tiles = this.generateRandomTiles();
         this.randomizeBoard();
@@ -40,32 +52,44 @@ export default class TileMap {
     private randomizeBoard(): void {
         for (let r = 0; r < this.rows; r++) {
             for (let c = 0; c < this.cols; c++) {
-                this.tiles[r][c] = Math.floor(Math.random() * this.tileCount);
+                this.tiles[r][c].index = Math.floor(Math.random() * this.tileCount);
             }
         }
     }
 
-    private generateRandomTiles(): number[][] {
-        const out: number[][] = [];
+    private generateRandomTiles(): Tile[][] {
+        const out: Tile[][] = [];
         for (let r = 0; r < this.rows; r++) {
-            const row: number[] = [];
+            const row: Tile[] = [];
             for (let c = 0; c < this.cols; c++) {
-                row.push(Math.floor(Math.random() * this.tileCount));
+                const t: Tile = {
+                    index: Math.floor(Math.random() * this.tileCount),
+                    changing: false,
+                    tileChangeStartTick: 0,
+                    tileChangeDurTicks: 0,
+                }
+                row.push(t);
             }
             out.push(row)
         }
         return out;
     }
 
-    private generateRandomTilesFromSeed(seed: number): number[][] {
+    private generateRandomTilesFromSeed(seed: number): Tile[][] {
         
         const rand = mulberry32(seed);
         
-        const out: number[][] = [];
+        const out: Tile[][] = [];
         for (let r = 0; r < this.rows; r++) {
-            const row: number[] = [];
+            const row: Tile[] = [];
             for (let c = 0; c < this.cols; c++) {
-                row.push(Math.floor(rand() * this.tileCount));
+                const t: Tile = {
+                    index: Math.floor(rand() * this.tileCount),
+                    changing: false,
+                    tileChangeStartTick: 0,
+                    tileChangeDurTicks: 0,
+                }
+                row.push(t);
             }
             out.push(row)
         }
@@ -78,6 +102,18 @@ export default class TileMap {
 
     rerollWithSeed(seed: number): void {
         this.tiles = this.generateRandomTilesFromSeed(seed);
+    }
+
+    setAuthoritativeInitiateColorChange(tilePos: Vector2, toIndex: number, tileChangeStartTick: number, tileChangeDurTicks: number): void {
+        console.log("setAuthoritativeInidiateColorChange");
+        if (this.inBounds(tilePos)) {
+            this.tiles[tilePos.y][tilePos.x].index = toIndex; // TODO tile change index changed, check locally for a "combo"
+            this.tiles[tilePos.y][tilePos.x].changing = true;
+            this.tiles[tilePos.y][tilePos.x].tileChangeStartTick = tileChangeStartTick;
+            this.tiles[tilePos.y][tilePos.x].tileChangeDurTicks = tileChangeDurTicks;
+            console.log("Client side msg: server sent InitiateColorChange at %d, %d", tilePos.x, tilePos.y);
+        }
+        return;
     }
     
 
@@ -117,12 +153,12 @@ export default class TileMap {
 
     getTileIndex(tilePos: Vector2): number | null {
         if (!this.inBounds(tilePos)) return null;
-        return this.tiles[tilePos.y][tilePos.x];
+        return this.tiles[tilePos.y][tilePos.x].index;
     } 
 
     setTileIndex(tilePos: Vector2, index: number): void {
         if (this.inBounds(tilePos)) {
-            this.tiles[tilePos.y][tilePos.x] = index;
+            this.tiles[tilePos.y][tilePos.x].index = index;
         }
         return;
     }
@@ -136,19 +172,44 @@ export default class TileMap {
         return false;
     }
 
-    draw(ctx: CanvasRenderingContext2D): void {
+    private getAlpha(nowMs: number, a: Tile): number {
+        const estTick = this.getEstimatedTick(nowMs);
+        const t = (estTick - a.tileChangeStartTick) / a.tileChangeDurTicks
+        const tt = Math.max(0, Math.min(1, t)); //clamp to 1
+        return 1-tt
+    }
+
+    draw(ctx: CanvasRenderingContext2D, nowMs: number): void {
         // if the underlying resource isn't loaded yet, Sprite.drawImage won't draw it
         for (let r = 0; r < this.rows; r++) {
             for (let c = 0; c < this.cols; c++) {
-                const index = this.tiles[r][c]; 
+                const index = this.tiles[r][c].index; 
                 const x = c * this.tileSize;
                 const y = r * this.tileSize;
 
                 this.tileSprite.frame = index;
                 this.tileSprite.drawImage(ctx,x,y);
 
+                if (this.tiles[r][c].changing) {
+                    let prevTileIndex = this.tiles[r][c].index - 1;
+                    if (prevTileIndex < 0) prevTileIndex = NUMBER_OF_COLORS - 1;
+
+                    this.tileSprite.frame = prevTileIndex;
+
+                    const alpha = this.getAlpha(nowMs, this.tiles[r][c]);
+                    this.tileSprite.drawImageWithOpacity(ctx, x, y, alpha);
+                }
+
             }
         }
+    }
+
+    CheckColorChangeResult(x: number, y: number, player: number): ColorChangeResult {
+        return 'colorChangeSuccessful'
+    }
+
+    update(): void {
+
     }
 
 }

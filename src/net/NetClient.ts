@@ -1,5 +1,5 @@
 import type { Command } from '../commands';
-import type { PlayerSnapshotMsg, ConfigMsg, TileChangeMsg } from '../protocol';
+import type { PlayerSnapshotMsg, ConfigMsg, TileChangeMsg, TileInitiateChangeMsg} from '../protocol';
 
 type HelloMsg = { type: 'hello'; playerId: number; msg?: string };
 
@@ -10,7 +10,23 @@ export default class NetClient {
   playerId: number | null = null;
   config: ConfigMsg | null = null;
 
-  connect(url = 'ws://localhost:8080/ws') {
+  //these "handlers" streamline the code for: first, check if the message is actually the correct message type, then what do you do with the message
+      //(previously: I had a bunch of if statements that looked like this:)
+      //     if (this.isHelloMsg(raw)) { //isHelloMsg PROMISES to typescript that raw IS of type HelloMsg (see below)
+      //         this.playerId = raw.playerId;
+      //         return;
+      //     }
+ 
+  private handlers = [
+    { guard: this.isHelloMsg, handle: (m: HelloMsg) => { this.playerId = m.playerId; } },
+    { guard: this.isPlayerSnapshotMsg, handle: (m: PlayerSnapshotMsg) => { this.onPlayerSnapshot?.(m); } },
+    { guard: this.isConfigMsg, handle: (m: ConfigMsg) => { this.config = m; this.onConfig?.(m); } },
+    { guard: this.isTileChangeMsg, handle: (m: TileChangeMsg) => { this.onTileChange?.(m); } },
+    { guard: this.isTileInitiateChangeMsg, handle: (m: TileInitiateChangeMsg) => { this.onTileInitiateChange?.(m); } },
+  ];
+
+
+    connect(url = 'ws://localhost:8080/ws') {
     this.ws = new WebSocket(url);
 
     this.ws.addEventListener('open', () => {
@@ -20,30 +36,9 @@ export default class NetClient {
     this.ws.addEventListener('message', (event) => {
       const raw = JSON.parse(event.data) as unknown;
 
-      //Typescript basic: since (event) => is an ARROW function, this. refers to
-      //NetClient scope
-
-      if (this.isHelloMsg(raw)) { //isHelloMsg PROMISES to typescript that raw IS of type HelloMsg (see below)
-        this.playerId = raw.playerId;
-        console.log('[net] assigned playerId', this.playerId);
-        return;
-      }
-
-      if (this.isPlayerSnapshotMsg(raw)) {
-        this.onPlayerSnapshot?.(raw);
-        return;
-      }
-
-      if (this.isConfigMsg(raw)) {
-        this.config = raw;
-        this.onConfig?.(raw);
-        return;
-      }
-
-      if (this.isTileChangeMsg(raw)) {
-        this.onTileChange?.(raw);
-        return;
-      }
+      for (const h of this.handlers) {
+        if (h.guard(raw)) {h.handle?.(raw as any); return; }
+      }      
 
       console.log('[net] server msg', raw);
     });
@@ -85,9 +80,17 @@ export default class NetClient {
     );
   }
 
-  onPlayerSnapshot?: (s: PlayerSnapshotMsg) => void;
-  onConfig?: (c: ConfigMsg) => void;
-  onTileChange?: (m: TileChangeMsg) => void;
+  private isTileInitiateChangeMsg(x: unknown): x is TileInitiateChangeMsg {
+    return (
+      typeof x === 'object' && x !== null
+      && (x as any).type === 'tileInitiateChange'
+      && typeof (x as any).x === 'number'
+      && typeof (x as any).y === 'number'
+      && typeof (x as any).toIndex === 'number'
+      && typeof (x as any).tileChangeStartTick === 'number'
+      && typeof (x as any).tileChangeDurTicks === 'number'
+    );
+  }
 
   private isConfigMsg(x: unknown): x is ConfigMsg {
     return typeof x === 'object' && x !== null
@@ -95,6 +98,14 @@ export default class NetClient {
       && typeof (x as any).tickHz === 'number'
       && typeof (x as any).moveTicks === 'number';
   }
+
+  //my convention: use s for snapshot, c for config, m for messge
+  onPlayerSnapshot?: (s: PlayerSnapshotMsg) => void;
+  onConfig?: (c: ConfigMsg) => void;
+  onTileChange?: (m: TileChangeMsg) => void;
+  onTileInitiateChange?: (m: TileInitiateChangeMsg) => void;
+
+  
 
   sendCommand(cmd: Command) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;

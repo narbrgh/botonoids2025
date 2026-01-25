@@ -136,8 +136,17 @@ func runGameLoop(room *Room) {
 
 				if p.Mode == ColorChanging {
 					r := CheckColorChangeResult(p.X, p.Y, room.Map)
-
-					if r == ColorChangeSuccessful {
+					switch r {
+					case ColorChangeUnsuccessfulDoNotDecrement:
+						//do nothing
+					case ColorChangeUnsuccessfulStillDecrement:
+						p.NumColorChangesLeft = p.NumColorChangesLeft - 1
+						if p.NumColorChangesLeft <= 0 {
+							p.Mode = Cooldown
+							p.CooldownStartTick = room.Tick
+							p.CooldownDurTicks = CooldownTicks
+						}
+					case ColorChangeSuccessful:
 						p.NumColorChangesLeft = p.NumColorChangesLeft - 1
 						if p.NumColorChangesLeft <= 0 {
 							p.Mode = Cooldown
@@ -158,7 +167,9 @@ func runGameLoop(room *Room) {
 								broadcast(room, b)
 							}
 						}
-					}
+					default:
+						//do nothing
+					} //end switch r
 
 				}
 			}
@@ -210,6 +221,10 @@ func runGameLoop(room *Room) {
 
 		// 6) Updaters. (tile, player, etc)
 		room.Map.Update(room.Tick)
+
+		for _, p := range room.Players {
+			p.Update(room.Tick)
+		}
 
 		// 7) broadcast snapshots
 

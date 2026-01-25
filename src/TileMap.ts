@@ -176,8 +176,10 @@ export default class TileMap {
     private getAlpha(nowMs: number, a: Tile): number {
         const estTick = this.getEstimatedTick(nowMs);
         const t = (estTick - a.tileChangeStartTick) / a.tileChangeDurTicks
-        const tt = Math.max(0, Math.min(1, t)); //clamp to 1
-        return 1-tt
+
+        const tt = 1-(Math.max(0, Math.min(1, t))); //clamp to 0,1
+
+        return tt * tt ;//* (3 - 2 * tt); // smoothing function: fast->slow->fast
     }
 
     draw(ctx: CanvasRenderingContext2D, nowMs: number): void {

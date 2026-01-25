@@ -130,3 +130,11 @@ func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
 		}
 	}
 }
+
+func (pl *PlayerState) Update(currentTick uint64) {
+	if pl.Mode == Cooldown {
+		if currentTick-pl.CooldownStartTick >= pl.CooldownDurTicks {
+			pl.Mode = Walking
+		}
+	}
+}

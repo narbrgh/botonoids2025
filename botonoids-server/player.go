@@ -9,7 +9,7 @@ func isValidDir(d DirType) bool {
 	}
 }
 
-type PlayerState struct {
+type PlayerState struct { // this is the struct that gets sent through the protocol over the wire
 	ID        int      `json:"id"`
 	X         int      `json:"x"`
 	Y         int      `json:"y"`
@@ -28,6 +28,8 @@ type PlayerState struct {
 	Mode                ModeType `json:"mode"`
 	NumColorChangesLeft int      `json:"numColorChangesLeft"`
 	NumWallsLeft        int      `json:"numWallsLeft"`
+	CooldownStartTick   uint64   `json:"cooldownStartTick"`
+	CooldownDurTicks    uint64   `json:"cooldownDurTicks"`
 }
 
 // -------------------------------------

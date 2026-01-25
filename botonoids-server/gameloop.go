@@ -138,7 +138,12 @@ func runGameLoop(room *Room) {
 					r := CheckColorChangeResult(p.X, p.Y, room.Map)
 
 					if r == ColorChangeSuccessful {
-
+						p.NumColorChangesLeft = p.NumColorChangesLeft - 1
+						if p.NumColorChangesLeft <= 0 {
+							p.Mode = Cooldown
+							p.CooldownStartTick = room.Tick
+							p.CooldownDurTicks = CooldownTicks
+						}
 						//set i to be what color it changes to;
 						// then tell the server TileMap about the initiateChange;
 						// then broadcast msg to Client about the InitiateChange
@@ -203,9 +208,21 @@ func runGameLoop(room *Room) {
 			p.MoveDurTicks = MoveTicks
 		}
 
-		// 6) broadcase snapshot
-		if b, err := encodeSnapshot(room); err == nil {
+		// 6) Updaters. (tile, player, etc)
+		room.Map.Update(room.Tick)
+
+		// 7) broadcast snapshots
+
+		// player snapshot is broadcasted every tick
+		if b, err := encodePlayerSnapshot(room); err == nil {
 			broadcast(room, b)
+		}
+
+		// tile snapshot is broadcasted every 20 ticks
+		if room.Tick%20 == 0 {
+			if b, err := encodeTileMapSnapshotMsg(room); err == nil {
+				broadcast(room, b)
+			}
 		}
 
 		room.Tick++

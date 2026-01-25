@@ -5,11 +5,8 @@ import { MOVE_DURATION_MS, MAX_TILES_COLOR_CHANGE, SERVER_TICK_MS, SERVER_TICK_H
 
 import type { TileActions, ColorChangeResult } from './TileMap';
 
-import type {SnapshotPlayer, DirType} from './protocol'
+import type {SnapshotPlayer, DirType, BotonoidMode} from './protocol'
 
-
-
-type BotonoidMode = 'normal' | 'colorChanging' | 'wallBuilding' | 'coolDown';
 
 type MoveState = {
     fromPx: Vector2;
@@ -28,9 +25,11 @@ export default class Botonoid {
   private facing: DirType = 'down';
 
   //mode
-  private mode: BotonoidMode = 'normal';
-  private numColorChanges: number = 0;
-  //private cooldownMsRemaining = 0;
+  private mode: BotonoidMode = 'walking';
+  private numColorChangesLeft: number = 0;
+  private numWallsLeft: number = 0;
+  private cooldownStartTick: number = 0;
+  private cooldownDurTicks: number = 0;
 
   // Pixel position (derived)
   readonly tileSize: number;
@@ -132,7 +131,8 @@ export default class Botonoid {
   }
 
   setAuthoritativeStateFromPlayerSnapshot(p: SnapshotPlayer) {
-    //store snapshot timing so we can estimate "current server tick"
+
+    //auth is JUST For movement code and smoothing it out
     this.auth.x = p.x;
     this.auth.y = p.y;
     this.auth.facing = p.facing;
@@ -144,6 +144,12 @@ export default class Botonoid {
     this.auth.moveStartTick = p.moveStartTick;
     this.auth.moveDurTicks = p.moveDurTicks;
 
+    this.mode = p.mode;
+    this.numColorChangesLeft = p.numColorChangesLeft;
+    this.numWallsLeft = p.numWallsLeft;
+    this.cooldownStartTick = p.cooldownStartTick;
+    this.cooldownDurTicks = p.cooldownDurTicks;
+
     this.facing = p.facing;
     this.sprite.frame = Botonoid.dirToFrame(this.facing);
 
@@ -152,8 +158,8 @@ export default class Botonoid {
   } 
 
   private decrementNumColorChanges(): void {
-    this.numColorChanges -= 1;
-    if (this.numColorChanges <= 0) {
+    this.numColorChangesLeft -= 1;
+    if (this.numColorChangesLeft <= 0) {
       //TODO enter cooldown
       console.log("enter cooldown");
     }
@@ -165,9 +171,47 @@ export default class Botonoid {
     this.tilePos.y = Math.max(0, Math.min(rows - 1, this.tilePos.y));
   }
 
+  private getProgressPercentage(nowMs: number): number {
+        const estTick = this.getEstimatedTick(nowMs);
+        const t = (estTick - this.cooldownStartTick) / this.cooldownDurTicks;
+        const tt = Math.max(0, Math.min(1, t)); //clamp to 1
+        return 1-tt
+    }
+  
   draw(ctx: CanvasRenderingContext2D, nowMs: number): void {
     const p = this.getDrawPx(nowMs);
     this.sprite.drawImage(ctx, p.x, p.y);
+
+    //draw a number above the head if not 0
+    if (this.numColorChangesLeft > 0) {
+      //console.log("drawing a number above head")
+      ctx.save();
+      ctx.font = '400 21px "Goldman"';
+      ctx.fillStyle = '#fff'
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.strokeStyle = '#000'
+      ctx.lineWidth = 3;
+      ctx.strokeText(String(this.numColorChangesLeft), p.x + this.tileSize/2, p.y+2); //TODO account for offset
+      ctx.fillText(String(this.numColorChangesLeft), p.x + this.tileSize/2, p.y+2); // TODO account for offset
+      ctx.restore();
+    }
+
+    //draw a progress bar above the head if cooldown
+    if (this.getMode() === 'cooldown') {
+      const percent = this.getProgressPercentage(nowMs);
+      const w = this.tileSize * percent;
+      const h = 6;
+      const x = p.x ;//+ this.tileSize / 2 - w / 2; // keep the second half of this expression to make it centered
+      const y = p.y - h;
+
+      ctx.save();
+      ctx.fillStyle = 'rgb(255, 255, 255)';
+      ctx.fillRect(x, y, w, h);
+      ctx.restore();
+
+    }
+    
   }
 
 
@@ -205,9 +249,9 @@ export default class Botonoid {
     console.log("handleAction");
 
     switch (this.mode) {
-      case 'normal':
+      case 'walking':
         this.mode = 'colorChanging';
-        this.numColorChanges = MAX_TILES_COLOR_CHANGE;
+        this.numColorChangesLeft = MAX_TILES_COLOR_CHANGE;
         return;
       case 'wallBuilding':
         this.tryToBuildWall();

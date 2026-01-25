@@ -1,6 +1,8 @@
 package main
 
-import "math/rand"
+import (
+	"math/rand"
+)
 
 type Tile struct {
 	Index               uint8  `json:"index"`
@@ -88,4 +90,19 @@ func TileMapInitiateColorChange(tm *TileMap, x, y int, index uint8, startTick ui
 	tm.Tiles[y][x].Changing = true
 	tm.Tiles[y][x].TileChangeStartTick = startTick
 	tm.Tiles[y][x].TileChangeDurTicks = numTicks
+}
+
+func (tm *TileMap) Update(currentTick uint64) {
+
+	for x := 0; x < tm.Cols; x++ {
+		for y := 0; y < tm.Rows; y++ {
+			if tm.Tiles[y][x].Changing == true {
+				deltaTime := currentTick - tm.Tiles[y][x].TileChangeStartTick
+				if deltaTime >= tm.Tiles[y][x].TileChangeDurTicks { // tile change is done
+					tm.Tiles[y][x].Changing = false
+				}
+			}
+		}
+	}
+
 }

@@ -1,5 +1,5 @@
 import type { Command } from '../commands';
-import type { PlayerSnapshotMsg, ConfigMsg, TileChangeMsg, TileInitiateChangeMsg} from '../protocol';
+import type { PlayerSnapshotMsg, TileMapSnapshotMsg, ConfigMsg, TileChangeMsg, TileInitiateChangeMsg} from '../protocol';
 
 type HelloMsg = { type: 'hello'; playerId: number; msg?: string };
 
@@ -20,6 +20,7 @@ export default class NetClient {
   private handlers = [
     { guard: this.isHelloMsg, handle: (m: HelloMsg) => { this.playerId = m.playerId; } },
     { guard: this.isPlayerSnapshotMsg, handle: (m: PlayerSnapshotMsg) => { this.onPlayerSnapshot?.(m); } },
+    { guard: this.isTileMapSnapshotMsg, handle: (m: TileMapSnapshotMsg) => { this.onTileMapSnapshot?.(m);}},
     { guard: this.isConfigMsg, handle: (m: ConfigMsg) => { this.config = m; this.onConfig?.(m); } },
     { guard: this.isTileChangeMsg, handle: (m: TileChangeMsg) => { this.onTileChange?.(m); } },
     { guard: this.isTileInitiateChangeMsg, handle: (m: TileInitiateChangeMsg) => { this.onTileInitiateChange?.(m); } },
@@ -35,7 +36,7 @@ export default class NetClient {
 
     this.ws.addEventListener('message', (event) => {
       const raw = JSON.parse(event.data) as unknown;
-
+      
       for (const h of this.handlers) {
         if (h.guard(raw)) {h.handle?.(raw as any); return; }
       }      
@@ -74,9 +75,23 @@ export default class NetClient {
     return (
         typeof x === 'object' &&
         x !== null &&
-        (x as any).type === 'snapshot' &&
+        (x as any).type === 'playerSnapshot' &&
         typeof (x as any).tick === 'number' &&
         Array.isArray((x as any).players)
+    );
+  }
+
+    private isTileMapSnapshotMsg(x: unknown): x is TileMapSnapshotMsg {
+    return (
+        typeof x === 'object' &&
+        x !== null &&
+        (x as any).type === 'tileMapSnapshot' &&
+        typeof (x as any).tick === 'number' &&
+        (x as any).tileMap &&
+        typeof (x as any).tileMap === 'object' &&
+        typeof (x as any).tileMap.cols === 'number' &&
+        typeof (x as any).tileMap.rows === 'number' &&
+        Array.isArray((x as any).tileMap.tiles)
     );
   }
 
@@ -101,6 +116,7 @@ export default class NetClient {
 
   //my convention: use s for snapshot, c for config, m for messge
   onPlayerSnapshot?: (s: PlayerSnapshotMsg) => void;
+  onTileMapSnapshot?: (s: TileMapSnapshotMsg) => void;
   onConfig?: (c: ConfigMsg) => void;
   onTileChange?: (m: TileChangeMsg) => void;
   onTileInitiateChange?: (m: TileInitiateChangeMsg) => void;

@@ -2,6 +2,7 @@ import {Sprite} from './Sprite';
 import { NUMBER_OF_COLORS} from './Constants';
 import Vector2 from './Vector2';
 import { mulberry32 } from './rng';
+import type { SnapshotTileMap, SnapshotTile } from './protocol';
 
 export type ColorChangeResult =
   | 'colorChangeSuccessful'
@@ -204,12 +205,25 @@ export default class TileMap {
         }
     }
 
-    CheckColorChangeResult(x: number, y: number, player: number): ColorChangeResult {
-        return 'colorChangeSuccessful'
+    update(nowMs: number): void {
+        //loop through the tiles, and if "changing," update them
+        //TODO implement this. If necessary. It may be "good enough" for now to not update the tile changing locally
+
+        for (let r = 0; r < this.rows; r++) {
+            for (let c = 0; c < this.cols; c++) {
+                if (this.tiles[r][c].changing) {
+                    const deltaTicks = this.getEstimatedTick(nowMs) - this.tiles[r][c].tileChangeStartTick
+                    if (deltaTicks > this.tiles[r][c].tileChangeDurTicks) {
+                        this.tiles[r][c].changing = false;
+                    }
+                }
+            }
+        }
     }
 
-    update(): void {
-
+    setAuthoritativeStateFromTileMapSnapshot(s: SnapshotTileMap) {
+        this.tiles = s.tiles
+        console.log("this.tile = s.tiles")
     }
 
 }

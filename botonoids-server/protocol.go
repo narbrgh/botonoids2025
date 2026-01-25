@@ -104,11 +104,19 @@ func decodeInputCmd(raw json.RawMessage) (InputCmd, error) {
 	return cmd, err
 }
 
-type SnapshotMsg struct {
-	Type    string         `json:"type"` // "snapshot"
+type PlayerSnapshotMsg struct {
+	Type    string         `json:"type"` // "playerSnapshot"
 	Tick    uint64         `json:"tick"`
 	Phase   Phase          `json:"phase"`
 	Players []*PlayerState `json:"players"`
+	TileMap *TileMap       `json:"tileMap"`
+}
+
+type TileMapSnapshotMsg struct {
+	Type    string   `json:"type"` // "tileMapSnapshot"
+	Tick    uint64   `json:"tick"`
+	Phase   Phase    `json:"phase"`
+	TileMap *TileMap `json:"tileMap"`
 }
 
 type TileChangeMsg struct {
@@ -128,12 +136,18 @@ type TileInitiateChangeMsg struct {
 }
 
 // helper function to encode once
-func encodeSnapshot(room *Room) ([]byte, error) {
+func encodePlayerSnapshot(room *Room) ([]byte, error) {
 	players := make([]*PlayerState, 0, len(room.Players))
 	for _, p := range room.Players {
 		players = append(players, p)
 	}
-	msg := SnapshotMsg{Type: "snapshot", Tick: room.Tick, Phase: room.Phase, Players: players}
+
+	msg := PlayerSnapshotMsg{Type: "playerSnapshot", Tick: room.Tick, Phase: room.Phase, Players: players}
+	return json.Marshal(msg)
+}
+
+func encodeTileMapSnapshotMsg(room *Room) ([]byte, error) {
+	msg := TileMapSnapshotMsg{Type: "tileMapSnapshot", Tick: room.Tick, Phase: room.Phase, TileMap: room.Map}
 	return json.Marshal(msg)
 }
 

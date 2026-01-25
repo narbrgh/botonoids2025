@@ -6,7 +6,7 @@ import Vector2 from './Vector2';
 import { resources } from './Resources';
 import TileMap from './TileMap';
 import Botonoid from './Botonoid';
-import type { PlayerSnapshotMsg, TileChangeMsg , TileInitiateChangeMsg} from './protocol'
+import type { PlayerSnapshotMsg, TileMapSnapshotMsg, TileChangeMsg , TileInitiateChangeMsg} from './protocol'
 
 import { TILE_SIZE, FRAME_SIZE, MOVE_DURATION_MS} from './Constants';
 
@@ -15,7 +15,10 @@ import type { DirType, InputCmd } from './protocol';
 import KeyboardController from './KeyboardController';
 import { P1_KEYS, P2_KEYS } from './keymaps';
 import ServerClock from './ServerClock';
+
+import './style.css'
 //import type { Command } from './commands';
+
 
 const canvasEl = document.getElementById('game');
 if (!(canvasEl instanceof HTMLCanvasElement)) throw new Error('Canvas #game not found');
@@ -106,14 +109,24 @@ net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
     }
 
     bot.setAuthoritativeStateFromPlayerSnapshot(p);
-
-    clock.updateSnapshot(s.tick, receivedAtMs);
+    
   }
+
+  clock.updateSnapshot(s.tick, receivedAtMs);
 
   //optional: remove disconnected players
   for (const [id] of botsById) {
     if (!seen.has(id)) botsById.delete(id);
   }
+};
+
+net.onTileMapSnapshot = (s: TileMapSnapshotMsg) => {
+  const receivedAtMs = performance.now()
+  console.log("net.onTileMapSnapshot");
+
+  clock.updateSnapshot(s.tick, receivedAtMs);
+  tileMap.setAuthoritativeStateFromTileMapSnapshot(s.tileMap);
+
 };
 
 net.onTileChange = (m: TileChangeMsg) => {
@@ -160,7 +173,8 @@ function drivePlayer(controller: KeyboardController, player: Botonoid, dt: numbe
 
 let lastDir: DirType | null = null;
 
-const update = () => {
+const update = (dt: number) => {
+  const nowMs = performance.now();
   for (const cmd of p1.consumeCommands()) net.sendCommand(cmd);
 
   const dir = p1.getMoveIntent();          // DirType | null
@@ -169,6 +183,11 @@ const update = () => {
     net.sendCommand({ type: 'input', dir });
     lastDir = dir;
   }
+
+  //TODO call player update here, if needed. (If we make the player's botonoid start to show actions before the server tells it that it happened)
+
+  tileMap.update(nowMs)
+
 };
 /*
 const update = (dt: number) => {
@@ -201,7 +220,9 @@ const render = () => {
   for (const bot of botsById.values()) {
     bot.draw(ctx, nowMs);
   }
+
 }
 
 new GameLoop(update, render).start();
+
 

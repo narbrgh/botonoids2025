@@ -33,6 +33,12 @@ export type SnapshotTile = {
   tileChangeDurTicks: number;
 }
 
+export type TileDelta = { // tile delta is used in changing numerous tiles at once (such as a combo or a garden)
+  x: number;
+  y: number;
+  index: number;
+}
+
 export type SnapshotTileMap = {
   cols: number;
   rows: number;
@@ -40,24 +46,31 @@ export type SnapshotTileMap = {
 }
 
 export type PlayerSnapshotMsg = {
-  type: 'snapshot';
+  type: 'playerSnapshot'; // formerly just said 'snapshot'
   tick: number;
   phase: 'lobby' | 'countdown' | 'playing' | 'finished';
   players: SnapshotPlayer[];
 };
 
 export type TileMapSnapshotMsg = {
-  type: 'snapshot';
+  type: 'tileMapSnapshot'; // formerly just said 'snapshot'
   tick: number;
   phase: 'lobby' | 'countdown' | 'playing' | 'finished';
   tileMap: SnapshotTileMap;
 };
 
+//this changes a single tile
 export type TileChangeMsg = {
  type: "tileChange";
  x: number;
  y: number;
  index: number;
+}
+
+//this broadcasts a change of a list of tiles (ex: combo or garden)
+export type TileChangeListMsg = {
+  type: "tileChangeList";
+  tileChangeList: TileDelta[];
 }
 
 export type TileInitiateChangeMsg = {

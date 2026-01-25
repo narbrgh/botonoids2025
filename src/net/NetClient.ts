@@ -1,5 +1,5 @@
 import type { Command } from '../commands';
-import type { PlayerSnapshotMsg, TileMapSnapshotMsg, ConfigMsg, TileChangeMsg, TileInitiateChangeMsg} from '../protocol';
+import type { PlayerSnapshotMsg, TileMapSnapshotMsg, ConfigMsg, TileChangeMsg, TileInitiateChangeMsg, TileChangeListMsg} from '../protocol';
 
 type HelloMsg = { type: 'hello'; playerId: number; msg?: string };
 
@@ -23,6 +23,7 @@ export default class NetClient {
     { guard: this.isTileMapSnapshotMsg, handle: (m: TileMapSnapshotMsg) => { this.onTileMapSnapshot?.(m);}},
     { guard: this.isConfigMsg, handle: (m: ConfigMsg) => { this.config = m; this.onConfig?.(m); } },
     { guard: this.isTileChangeMsg, handle: (m: TileChangeMsg) => { this.onTileChange?.(m); } },
+    { guard: this.isTileChangeListMsg, handle: (m: TileChangeListMsg) => {this.onTileChangeList?.(m); }},
     { guard: this.isTileInitiateChangeMsg, handle: (m: TileInitiateChangeMsg) => { this.onTileInitiateChange?.(m); } },
   ];
 
@@ -81,7 +82,7 @@ export default class NetClient {
     );
   }
 
-    private isTileMapSnapshotMsg(x: unknown): x is TileMapSnapshotMsg {
+  private isTileMapSnapshotMsg(x: unknown): x is TileMapSnapshotMsg {
     return (
         typeof x === 'object' &&
         x !== null &&
@@ -94,6 +95,23 @@ export default class NetClient {
         Array.isArray((x as any).tileMap.tiles)
     );
   }
+
+  private isTileChangeListMsg(x: unknown): x is TileChangeListMsg {
+    return (
+        typeof x === 'object' &&
+        x !== null &&
+        (x as any).type === 'tileChangeList' &&
+        Array.isArray((x as any).tileChangeList) && 
+        (x as any).tileChangeList.every((t: any) =>
+        t &&
+        typeof t === 'object' &&
+        typeof t.x === 'number' &&
+        typeof t.y === 'number' &&
+        typeof t.index === 'number'
+      )
+    );
+  }
+
 
   private isTileInitiateChangeMsg(x: unknown): x is TileInitiateChangeMsg {
     return (
@@ -119,6 +137,7 @@ export default class NetClient {
   onTileMapSnapshot?: (s: TileMapSnapshotMsg) => void;
   onConfig?: (c: ConfigMsg) => void;
   onTileChange?: (m: TileChangeMsg) => void;
+  onTileChangeList?: (m: TileChangeListMsg) => void;
   onTileInitiateChange?: (m: TileInitiateChangeMsg) => void;
 
   

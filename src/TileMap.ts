@@ -2,7 +2,7 @@ import {Sprite} from './Sprite';
 import { NUMBER_OF_COLORS} from './Constants';
 import Vector2 from './Vector2';
 import { mulberry32 } from './rng';
-import type { SnapshotTileMap, SnapshotTile } from './protocol';
+import type { SnapshotTileMap, SnapshotTile, TileChangeListMsg } from './protocol';
 
 export type ColorChangeResult =
   | 'colorChangeSuccessful'
@@ -225,7 +225,12 @@ export default class TileMap {
 
     setAuthoritativeStateFromTileMapSnapshot(s: SnapshotTileMap) {
         this.tiles = s.tiles
-        console.log("this.tile = s.tiles")
+    }
+
+    setAuthoritativeTileChangeList(s: TileChangeListMsg) {
+        for (const t of s.tileChangeList) {
+            this.setTileIndex(new Vector2(t.x, t.y), t.index)
+        }    
     }
 
 }

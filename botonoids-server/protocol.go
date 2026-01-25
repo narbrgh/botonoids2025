@@ -26,7 +26,7 @@ type ConfigMsg struct {
 	// gameplay knobs
 	MoveDurMs           int `json:"moveDurMs"`
 	ColorCooldownMs     int `json:"colorCooldownMs"`
-	MaxTilesColorChange int `json:"maxTileColorChange"`
+	MaxTilesColorChange int `json:"maxTilesColorChange"`
 	TileSize            int `json:"tileSize"`
 
 	// world map
@@ -109,7 +109,6 @@ type PlayerSnapshotMsg struct {
 	Tick    uint64         `json:"tick"`
 	Phase   Phase          `json:"phase"`
 	Players []*PlayerState `json:"players"`
-	TileMap *TileMap       `json:"tileMap"`
 }
 
 type TileMapSnapshotMsg struct {
@@ -119,11 +118,16 @@ type TileMapSnapshotMsg struct {
 	TileMap *TileMap `json:"tileMap"`
 }
 
-type TileChangeMsg struct {
+type TileChangeMsg struct { // this changes a single tile
 	Type  string `json:"type"` // "tileChange"
 	X     int    `json:"x"`
 	Y     int    `json:"y"`
 	Index uint8  `json:"index"`
+}
+
+type TileChangeListMsg struct { // a list of several tile changes, such as when a combo or a garden is achieved
+	Type           string      `json:"type"` //tileChangeList
+	TileChangeList []TileDelta `json:"tileChangeList"`
 }
 
 type TileInitiateChangeMsg struct {

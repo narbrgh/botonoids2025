@@ -138,3 +138,12 @@ func (pl *PlayerState) Update(currentTick uint64) {
 		}
 	}
 }
+
+func (pl *PlayerState) DecrementNumColorChanges(currentTick uint64) {
+	pl.NumColorChangesLeft = pl.NumColorChangesLeft - 1
+	if pl.NumColorChangesLeft <= 0 {
+		pl.Mode = Cooldown
+		pl.CooldownStartTick = currentTick
+		pl.CooldownDurTicks = CooldownTicks
+	}
+}

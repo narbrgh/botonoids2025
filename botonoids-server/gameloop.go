@@ -140,31 +140,47 @@ func runGameLoop(room *Room) {
 					case ColorChangeUnsuccessfulDoNotDecrement:
 						//do nothing
 					case ColorChangeUnsuccessfulStillDecrement:
-						p.NumColorChangesLeft = p.NumColorChangesLeft - 1
-						if p.NumColorChangesLeft <= 0 {
-							p.Mode = Cooldown
-							p.CooldownStartTick = room.Tick
-							p.CooldownDurTicks = CooldownTicks
-						}
+						p.DecrementNumColorChanges(room.Tick)
 					case ColorChangeSuccessful:
-						p.NumColorChangesLeft = p.NumColorChangesLeft - 1
-						if p.NumColorChangesLeft <= 0 {
-							p.Mode = Cooldown
-							p.CooldownStartTick = room.Tick
-							p.CooldownDurTicks = CooldownTicks
-						}
-						//set i to be what color it changes to;
+
+						// check for combo,
+						// if not combo, then decrement numColorChanges while checking for changing to cooldown.
+						//       NOTE: special case. if it is a combo, subtract 1 from numColorChanges, but don't go to cooldown yet. This way if you get a combo on your last colorChange, you still have to do cooldown after done building walls
+						// then set i to be what color it changes to;
 						// then tell the server TileMap about the initiateChange;
 						// then broadcast msg to Client about the InitiateChange
 
 						i, ok := room.Map.GetTileIndexAfterColorChange(p.X, p.Y)
 
 						if ok {
-							TileMapInitiateColorChange(room.Map, p.X, p.Y, i, room.Tick, ColorChangeTicks)
-							msg := TileInitiateChangeMsg{Type: "tileInitiateChange", X: p.X, Y: p.Y, ToIndex: i, TileChangeStartTick: room.Tick, TileChangeDurTicks: ColorChangeTicks}
+							comboLength := TileMapInitiateColorChange(room.Map, p.X, p.Y, i, room.Tick, ColorChangeTicks, p.ID) // sends signal to the tilemap to start a color change. The tilemap will first check for a combo
 
-							if b, err := json.Marshal(msg); err == nil {
-								broadcast(room, b)
+							if comboLength >= MinimumCombo {
+								//NOTE: special case. if it is a combo, subtract 1 from numColorChanges, but don't go to cooldown yet. This way if you get a combo on your last colorChange, you still have to do cooldown after done building walls
+								p.NumColorChangesLeft = p.NumColorChangesLeft - 1
+
+								//InitiateCombo makes the tilemap into foundations
+								//TODO here I need to pass in the index of the foundation based on the p.ID. Currently hardcoded, need to make this protocolized somehow
+
+								//room.Map.InitiateCombo(p.FoundationIndex)
+								room.Map.InitiateCombo(5)
+
+								//now send a message
+								msg := TileChangeListMsg{Type: "tileChangeList", TileChangeList: room.Map.pending}
+								if b, err := json.Marshal(msg); err == nil {
+									broadcast(room, b)
+								}
+								room.Map.ResetChangeMap()
+
+								// Now need to change the botonoid mode to WallBuilding
+
+							} else { //not a combo, continue with the tile change
+								p.DecrementNumColorChanges(room.Tick)
+								msg := TileInitiateChangeMsg{Type: "tileInitiateChange", X: p.X, Y: p.Y, ToIndex: i, TileChangeStartTick: room.Tick, TileChangeDurTicks: ColorChangeTicks}
+
+								if b, err := json.Marshal(msg); err == nil {
+									broadcast(room, b)
+								}
 							}
 						}
 					default:

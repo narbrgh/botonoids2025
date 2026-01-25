@@ -6,7 +6,7 @@ import Vector2 from './Vector2';
 import { resources } from './Resources';
 import TileMap from './TileMap';
 import Botonoid from './Botonoid';
-import type { PlayerSnapshotMsg, TileMapSnapshotMsg, TileChangeMsg , TileInitiateChangeMsg} from './protocol'
+import type { PlayerSnapshotMsg, TileMapSnapshotMsg, TileChangeMsg , TileInitiateChangeMsg, TileChangeListMsg} from './protocol'
 
 import { TILE_SIZE, FRAME_SIZE, MOVE_DURATION_MS} from './Constants';
 
@@ -134,8 +134,11 @@ net.onTileChange = (m: TileChangeMsg) => {
 }
 
 net.onTileInitiateChange = (m: TileInitiateChangeMsg) => {
-  console.log("about to call setauthoritativeinitiatecolorchange");
   tileMap.setAuthoritativeInitiateColorChange(new Vector2(m.x, m.y), m.toIndex, m.tileChangeStartTick, m.tileChangeDurTicks);
+}
+
+net.onTileChangeList = (m: TileChangeListMsg) => {
+  tileMap.setAuthoritativeTileChangeList(m)
 }
 
 net.onConfig = (c) => {

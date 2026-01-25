@@ -16,4 +16,5 @@ const (
 	SpawnCols        = 12
 	NewSeed          = 10 //TODO make random seed
 	NumColors        = 5
+	MinimumCombo     = 5
 )

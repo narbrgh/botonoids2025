@@ -17,6 +17,7 @@ type TileMap struct {
 	Tiles       [][]Tile    `json:"tiles"`
 	tempTileMap [][]bool    `json:"-"` // tempTileMap is used to check for combos and walls, then implement them without running the flood fill algo twice
 	pending     []TileDelta `json:"-"`
+	rng         *rand.Rand  `json:"-"`
 }
 
 type TileDelta struct { //TileDelta is used for the multiple-tile-change-broadcast (such as combos and walls)
@@ -48,7 +49,7 @@ func NewTileMap(cols, rows int, seed int64) *TileMap {
 			temp[y][x] = false
 		}
 	}
-	return &TileMap{Cols: cols, Rows: rows, Tiles: t, tempTileMap: temp}
+	return &TileMap{Cols: cols, Rows: rows, Tiles: t, tempTileMap: temp, rng: rng}
 }
 
 func (tm *TileMap) SetTile(x, y int, index uint8) bool {
@@ -56,6 +57,15 @@ func (tm *TileMap) SetTile(x, y int, index uint8) bool {
 		return false
 	}
 	tm.Tiles[y][x].Index = index
+	return true
+}
+
+func (tm *TileMap) SetTileAndAddChange(x, y int, index uint8) bool {
+	if x < 0 || x >= tm.Cols || y < 0 || y >= tm.Rows {
+		return false
+	}
+	tm.Tiles[y][x].Index = index
+	tm.AddChange(x, y, index)
 	return true
 }
 
@@ -192,4 +202,33 @@ func (tm *TileMap) InitiateCombo(foundationTileIndex uint8) {
 		}
 	}
 
+}
+
+func (tm *TileMap) TryToBuildWall(x int, y int, FoundationIndex uint8, WallIndex uint8, playerID int) bool {
+	i, ok := tm.GetTileIndex(x, y)
+
+	if ok == false {
+		return false
+	}
+
+	//if i == pl.FoundationIndex { //TODO use pl.FoundationIndex
+	if i == uint8(FoundationIndex) {
+		tm.SetTileAndAddChange(x, y, WallIndex) //TODO use pl.WallIndex
+		return true
+	}
+
+	return false
+}
+
+func (tm *TileMap) ResetFoundationTiles(foundationTileIndex uint8) {
+	for y := range tm.Tiles {
+		for x := range tm.Tiles[y] {
+			if tm.Tiles[y][x].Index == foundationTileIndex {
+				r := uint8(tm.rng.Intn(NumColors))
+				tm.SetTile(x, y, r)
+				tm.AddChange(x, y, r)
+			}
+
+		}
+	}
 }

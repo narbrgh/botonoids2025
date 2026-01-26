@@ -16,6 +16,10 @@ export default class KeyboardController implements Controller {
     private pressed = new Set<string>();
     private dirStack: Dir[] = [];
 
+    //queued command - used for the action and item buttons which can be either pressed, released, or held,
+    // and the server has to know which of those is true
+    private queued: Command[] = [];
+
     private readonly keyMap: KeyMap;
 
     constructor(keyMap: KeyMap, target: Window = window) {
@@ -31,18 +35,28 @@ export default class KeyboardController implements Controller {
             this.down.add(key);
             this.pressed.add(key);
 
+            if (this.keyMap.action.includes(key)) {
+                this.queued.push({ type: 'actionDown'})
+            }
+
             const dir = this.keyToDir(key);
             if (dir) {
                 //make most recent direction win
                 this.dirStack = this.dirStack.filter(d => d !== dir); //TODO understand this line
                 this.dirStack.push(dir);
-
             }
+
+
+
         });
 
         target.addEventListener('keyup', (e) => {
             const key = e.key;
             this.down.delete(key);
+
+            if (this.keyMap.action.includes(key)) {
+                this.queued.push({ type: 'actionUp'})
+            }
 
             const dir = this.keyToDir(key)
             if(dir) {
@@ -58,7 +72,10 @@ export default class KeyboardController implements Controller {
     consumeCommands(): Command[] {
         const cmds: Command[] = [];
 
-        if (this.anyPressed(this.keyMap.action)) cmds.push({type: 'action' });
+        //drain queued edge commands
+        cmds.push(...this.queued);
+        this.queued.length = 0;
+        
         if (this.anyPressed(this.keyMap.changeItem)) cmds.push({type: 'changeItem' });
         if (this.anyPressed(this.keyMap.useItem)) cmds.push({type: 'useItem' });
 

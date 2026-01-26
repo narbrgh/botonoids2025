@@ -67,7 +67,7 @@ export default class Botonoid {
   }
 
   applyCommand(cmd: Command, cols: number, rows: number): void {
-    if (cmd.type === 'action') {this.handleAction(); return;}
+    //if (cmd.type === 'action') {this.handleAction(); return;} //ERIKISCOOL
     
     if (cmd.type !== 'move') return; // for now, we are only programming move commands
 
@@ -176,15 +176,9 @@ export default class Botonoid {
         const t = (estTick - this.cooldownStartTick) / this.cooldownDurTicks;
         const tt = Math.max(0, Math.min(1, t)); //clamp to 1
         return 1-tt
-    }
-  
-  draw(ctx: CanvasRenderingContext2D, nowMs: number): void {
-    const p = this.getDrawPx(nowMs);
-    this.sprite.drawImage(ctx, p.x, p.y);
+  }
 
-    //draw a number above the head if not 0
-    if (this.numColorChangesLeft > 0) {
-      //console.log("drawing a number above head")
+  private drawNumber(ctx: CanvasRenderingContext2D, x: number, y: number, n: number) {
       ctx.save();
       ctx.font = '400 21px "Goldman"';
       ctx.fillStyle = '#fff'
@@ -192,18 +186,29 @@ export default class Botonoid {
       ctx.textBaseline = 'bottom';
       ctx.strokeStyle = '#000'
       ctx.lineWidth = 3;
-      ctx.strokeText(String(this.numColorChangesLeft), p.x + this.tileSize/2, p.y+2); //TODO account for offset
-      ctx.fillText(String(this.numColorChangesLeft), p.x + this.tileSize/2, p.y+2); // TODO account for offset
+      ctx.strokeText(String(n), x, y); //TODO account for offset
+      ctx.fillText(String(n), x, y); // TODO account for offset
       ctx.restore();
+  }
+
+  draw(ctx: CanvasRenderingContext2D, nowMs: number): void {
+    const p = this.getDrawPx(nowMs);
+    this.sprite.drawImage(ctx, p.x, p.y);
+
+    //draw numColorChanges above the head if not 0
+    if (this.numColorChangesLeft > 0) {
+      this.drawNumber(ctx, p.x + this.tileSize/2, p.y+2, this.numColorChangesLeft)
+    }
+
+    //draw numWallsLeft on the body if not 0
+    if (this.numWallsLeft > 0) {
+      this.drawNumber(ctx, p.x + this.tileSize/2, p.y + this.tileSize/2+6, this.numWallsLeft)
     }
 
     //draw a progress bar above the head if cooldown
     if (this.getMode() === 'cooldown') {
       const percent = this.getProgressPercentage(nowMs);
-      const w = this.tileSize * percent;
-      const h = 6;
-      const x = p.x ;//+ this.tileSize / 2 - w / 2; // keep the second half of this expression to make it centered
-      const y = p.y - h;
+      const w = this.tileSize * percent;       const h = 6;    const y = p.y - h;     const x = p.x ;//+ this.tileSize / 2 - w / 2; // keep the second half of this expression to make it centered
 
       ctx.save();
       ctx.fillStyle = 'rgb(255, 255, 255)';

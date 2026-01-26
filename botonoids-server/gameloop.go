@@ -50,6 +50,43 @@ func broadcast(room *Room, msg []byte) {
 	}
 }
 
+func CheckForWallBuild(room *Room, p *PlayerState) {
+	if p.ActionPressed == true {
+		//result := room.Map.TryToBuildWall(p.X, p.Y, p.FoundationIndex, p.WallIndex, p.ID) //TODO use foundation index and wallindex
+		result := room.Map.TryToBuildWall(p.X, p.Y, 5, 6, p.ID)
+
+		if result == true { //wall was built
+
+			//Decrement numWallsLeft
+			p.NumWallsLeft = p.NumWallsLeft - 1
+			if p.NumWallsLeft <= 0 {
+
+				//the wallbuilding is done, so first reset the foundation tiles into wall tiles.
+
+				//TODO reset foundation tiles
+				room.Map.ResetFoundationTiles(5) // TODO add foundationindex
+
+				// Now account for the special case: if there are still some tileChangesLeft, enter color changing mode.
+				// else, enter cooldown
+
+				if p.NumColorChangesLeft > 0 {
+					p.Mode = ColorChanging
+				} else {
+					p.EnterCooldown(room.Tick)
+				}
+			}
+
+			//now send a message (this will broadcast the walls built, and the change from foundation tiles to regular colors)
+			msg := TileChangeListMsg{Type: "tileChangeList", TileChangeList: room.Map.pending}
+			if b, err := json.Marshal(msg); err == nil {
+				broadcast(room, b)
+			}
+			room.Map.ResetChangeMap()
+
+		}
+	}
+}
+
 func runGameLoop(room *Room) {
 	tickDur := time.Second / time.Duration(TickHz)
 	ticker := time.NewTicker(tickDur)
@@ -98,6 +135,8 @@ func runGameLoop(room *Room) {
 						Mode:                Walking,
 						NumColorChangesLeft: 0,
 						NumWallsLeft:        0,
+						//FoundationIndex:     5,
+						//WallIndex:           6,
 					}
 				}
 			case u := <-unregCh:
@@ -123,9 +162,13 @@ func runGameLoop(room *Room) {
 		// 4) advance any in-progress moves
 		for _, p := range room.Players {
 			if !p.Moving {
+				if p.Mode == WallBuilding {
+					CheckForWallBuild(room, p)
+				}
+
 				continue
 			}
-			if room.Tick-p.MoveStartTick >= p.MoveDurTicks {
+			if room.Tick-p.MoveStartTick >= p.MoveDurTicks { // Tile move just finished! Time to check a bunch of stuff
 				//commit at end of move
 				p.X = p.ToX
 				p.Y = p.ToY
@@ -165,6 +208,10 @@ func runGameLoop(room *Room) {
 								//room.Map.InitiateCombo(p.FoundationIndex)
 								room.Map.InitiateCombo(5)
 
+								// change mode to wallbuilding
+								p.Mode = WallBuilding
+								p.NumWallsLeft = comboLength - 3 // you can build 3 less walls than what your combo was
+
 								//now send a message
 								msg := TileChangeListMsg{Type: "tileChangeList", TileChangeList: room.Map.pending}
 								if b, err := json.Marshal(msg); err == nil {
@@ -187,7 +234,9 @@ func runGameLoop(room *Room) {
 						//do nothing
 					} //end switch r
 
-				}
+				} else if p.Mode == WallBuilding {
+					CheckForWallBuild(room, p)
+				} // end else if p.Mode == WallBuilding
 			}
 		}
 

@@ -85,6 +85,14 @@ type ActionCmd struct {
 	Type string `json:"type"` // "action"
 }
 
+type ActionDownCmd struct {
+	Type string `json:"type"` // "actionDown"
+}
+
+type ActionUpCmd struct {
+	Type string `json:"type"` // "actionUp"
+}
+
 type ChangeItemCmd struct {
 	Type string `json:"type"` // "changeItem"
 }

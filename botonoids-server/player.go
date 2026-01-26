@@ -30,6 +30,8 @@ type PlayerState struct { // this is the struct that gets sent through the proto
 	NumWallsLeft        int      `json:"numWallsLeft"`
 	CooldownStartTick   uint64   `json:"cooldownStartTick"`
 	CooldownDurTicks    uint64   `json:"cooldownDurTicks"`
+
+	ActionPressed bool `json:"-"`
 }
 
 // -------------------------------------
@@ -95,13 +97,35 @@ func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
 		p.MoveStartTick = room.Tick
 		p.MoveDurTicks = MoveTicks
 
+	// NOTE: This "case action" is no longer called. case action was for the original edge-triggered case
+	// where it was actually PRESSED.
+	//
+	// If you want to re-enable this, go to Botonoids.ts, uncomment the first line of applyCommand
+	// (control+F "ERIKISCOOL" to find the line).
+	//
+	// Then go to KeyboardController.ts, under ConsumeCommands, and add:
+	//     if (this.anyPressed(this.keyMap.action)) cmds.push({type: 'action' });
 	case "action":
-		// for now, do nothing on server. TODO finish adding action
 		switch p.Mode {
 		case Walking:
 			p.Mode = ColorChanging
-			p.NumColorChangesLeft = 5 //TODO make it not hardcoded
+			p.NumColorChangesLeft = MaxNumColorChanges
+		case WallBuilding:
+			p.ActionPressed = true
 		}
+
+	case "actionDown":
+		switch p.Mode {
+		case Walking:
+			p.Mode = ColorChanging
+			p.NumColorChangesLeft = MaxNumColorChanges
+		case WallBuilding:
+			p.ActionPressed = true
+		}
+
+	case "actionUp":
+		//only meaningful for wallBuilding
+		p.ActionPressed = false
 
 	case "input":
 		cmd, err := decodeInputCmd(qc.Cmd)
@@ -142,8 +166,12 @@ func (pl *PlayerState) Update(currentTick uint64) {
 func (pl *PlayerState) DecrementNumColorChanges(currentTick uint64) {
 	pl.NumColorChangesLeft = pl.NumColorChangesLeft - 1
 	if pl.NumColorChangesLeft <= 0 {
-		pl.Mode = Cooldown
-		pl.CooldownStartTick = currentTick
-		pl.CooldownDurTicks = CooldownTicks
+		pl.EnterCooldown(currentTick)
 	}
+}
+
+func (pl *PlayerState) EnterCooldown(currentTick uint64) {
+	pl.Mode = Cooldown
+	pl.CooldownStartTick = currentTick
+	pl.CooldownDurTicks = CooldownTicks
 }

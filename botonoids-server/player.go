@@ -31,6 +31,11 @@ type PlayerState struct { // this is the struct that gets sent through the proto
 	CooldownStartTick   uint64   `json:"cooldownStartTick"`
 	CooldownDurTicks    uint64   `json:"cooldownDurTicks"`
 
+	// variables for Phase and game flow
+	Ready bool `json:"ready"`
+	// TODO here is where i will add what color the player chooses, or if they've chosen to be an observer
+	// Selection SelectionType `json:"selection"` // something like gold, silver, or white
+
 	ActionPressed bool `json:"-"`
 }
 
@@ -41,6 +46,7 @@ type PlayerState struct { // this is the struct that gets sent through the proto
 //---------------------------------------
 
 func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
+
 	p, ok := room.Players[qc.PlayerID]
 	if !ok {
 		return
@@ -48,6 +54,14 @@ func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
 
 	typ, err := peekCmdType(qc.Cmd)
 	if err != nil {
+		return
+	}
+
+	if room.Phase != PhasePlaying {
+		//only process non-playing commands
+		if typ == "ready" {
+			//handle ready here
+		}
 		return
 	}
 

@@ -3,9 +3,11 @@ package main
 import "time"
 
 type Room struct {
-	ID    string
-	Tick  uint64
-	Phase Phase
+	ID   string
+	Tick uint64
+
+	Phase           Phase
+	PhaseEndsAtTick uint64
 
 	Seed uint32
 

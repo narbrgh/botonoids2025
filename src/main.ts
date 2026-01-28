@@ -7,6 +7,7 @@ import { resources } from './Resources';
 import TileMap from './TileMap';
 import Botonoid from './Botonoid';
 import type { PlayerSnapshotMsg, TileMapSnapshotMsg, TileChangeMsg , TileInitiateChangeMsg, TileChangeListMsg} from './protocol'
+import type { Phase , Role } from './protocol';
 
 import { TILE_SIZE, FRAME_SIZE, MOVE_DURATION_MS} from './Constants';
 
@@ -47,25 +48,6 @@ const clock = new ServerClock();
 const getEstimatedTick = clock.estimatedTick.bind(clock);
 const tileMap = new TileMap({cols, rows, tileSize: TILE_SIZE, tileSprite, getEstimatedTick });
 
-// Players
-const goldSprite = new Sprite({
-  resource: resources.images.goldBot,
-  frameSize: new Vector2(32, 32),
-  hFrames: 1,
-  vFrames: 4,
-  frame: 2,
-  scale: 1,
-});
-
-const silverSprite = new Sprite({
-  resource: resources.images.silverBot,
-  frameSize: new Vector2(32, 32),
-  hFrames: 1,
-  vFrames: 4,
-  frame: 2,
-  scale: 1,
-});
-
 // ------ Controllers ------
 const p1 = new KeyboardController(P2_KEYS); // TODO make it make sense. currently lazily using P2_KEYS because those are arrow keys, instead of changing the file
 
@@ -73,22 +55,14 @@ const p1 = new KeyboardController(P2_KEYS); // TODO make it make sense. currentl
 
 const botsById = new Map<number, Botonoid>();
 
-function spriteForPlayer(skin: 'gold' | 'silver'): Sprite {
-  // simplest: odd = gold, even = silver
-  return new Sprite({
-    resource: skin === 'gold' ? resources.images.goldBot : resources.images.silverBot,
-    frameSize: new Vector2(32, 32),
-    hFrames:1,
-    vFrames:4,
-    frame: 2,
-    scale: 1,
-  });
-}
-
 const net = new NetClient();
 net.connect();
 
+let currentPhase: Phase = 'phaseLobby'
+
 net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
+
+  currentPhase = s.phase;
   const receivedAtMs = performance.now()
   const seen = new Set<number>();
 
@@ -121,8 +95,9 @@ net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
 };
 
 net.onTileMapSnapshot = (s: TileMapSnapshotMsg) => {
+  currentPhase = s.phase;
+
   const receivedAtMs = performance.now()
-  console.log("net.onTileMapSnapshot");
 
   clock.updateSnapshot(s.tick, receivedAtMs);
   tileMap.setAuthoritativeStateFromTileMapSnapshot(s.tileMap);
@@ -147,11 +122,24 @@ net.onConfig = (c) => {
   clock.updateConfig(c.tickHz);
 }
 
+let lastDir: DirType | null = null;
+
+new GameLoop(update, render).start();
 
 
+function spriteForPlayer(skin: 'gold' | 'silver'): Sprite {
+  // simplest: odd = gold, even = silver
+  return new Sprite({
+    resource: skin === 'gold' ? resources.images.goldBot : resources.images.silverBot,
+    frameSize: new Vector2(32, 32),
+    hFrames:1,
+    vFrames:4,
+    frame: 2,
+    scale: 1,
+  });
+}
 
 function drivePlayer(controller: KeyboardController, player: Botonoid, dt: number) {
-
   // buttons (action/changeItem/useItem) — Botonoid ignores for now, but you’ll later route these
   for (const cmd of controller.consumeCommands()) {
     net.sendCommand(cmd);
@@ -169,63 +157,88 @@ function drivePlayer(controller: KeyboardController, player: Botonoid, dt: numbe
   }
 
   player.update(dt);
-
 }
 
-//let nextMoveAllowedAtMs = 0;
-
-let lastDir: DirType | null = null;
-
-const update = (dt: number) => {
+function update(dt: number) {
   const nowMs = performance.now();
-  for (const cmd of p1.consumeCommands()) net.sendCommand(cmd);
 
-  const dir = p1.getMoveIntent();          // DirType | null
+  switch (currentPhase) {
+    case 'phaseLobby': {
+      //only allow "ready" on Enter. no other commands
+      if (p1.consumeCommands().some(c => c.type === 'actionDown')) {
+        net.sendCommand({ type: 'ready', role: 'randomBot' });
+      }
+      break;
+    } //end if case phaselobby
+    case 'phasePlaying': {
+      for (const cmd of p1.consumeCommands()) net.sendCommand(cmd);
+      const dir = p1.getMoveIntent();          // DirType | null
+      if (dir !== lastDir) {
+        net.sendCommand({ type: 'input', dir });
+        lastDir = dir;
+      }
+      //TODO call player update here, if needed. (If we make the player's botonoid start to show actions before the server tells it that it happened)
+      tileMap.update(nowMs)
 
-  if (dir !== lastDir) {
-    net.sendCommand({ type: 'input', dir });
-    lastDir = dir;
+      break;
+    } //end if case phaseplaying
   }
-
-  //TODO call player update here, if needed. (If we make the player's botonoid start to show actions before the server tells it that it happened)
-
-  tileMap.update(nowMs)
-
-};
-/*
-const update = (dt: number) => {
-  // Only send commands; don't move local bots here.
-  for (const cmd of p1.consumeCommands()) {
-    net.sendCommand(cmd);
-  }
-
-  // add a "throttle" so it only send move commands if it thinks it can move
-  const now = performance.now();
-  if (now < nextMoveAllowedAtMs) return;
-
-  // movement intent
-  const dir = p1.getMoveIntent();
-  if (dir) net.sendCommand({ type: 'move', dir });
   
-  nextMoveAllowedAtMs = now + MOVE_DURATION_MS;
-};
-*/
+}
 
-
-const render = () => {
+function render() {
   const nowMs = performance.now();
 
   ctx.fillStyle = '#313642ff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  tileMap.draw(ctx, nowMs);
+  switch (currentPhase) {
+    case 'phaseLobby': {
+    drawText(ctx, 'lobby: press Enter when ready', canvas.width/2, canvas.height/2, {
+      font: '400 20px "Goldman"',
+      stroke: '#000',
+      strokeWidth: 4,
+    });
 
-  for (const bot of botsById.values()) {
-    bot.draw(ctx, nowMs);
+      break;
+    }
+    case 'phaseCountdown': case 'phasePlaying': {
+      tileMap.draw(ctx, nowMs);
+
+      for (const bot of botsById.values()) {
+        bot.draw(ctx, nowMs);
+      }
+      break;
+    }
   }
-
+  
 }
 
-new GameLoop(update, render).start();
-
-
+function drawText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  opts: {
+    font?: string;
+    fill?: string;
+    stroke?: string;
+    strokeWidth?: number;
+    align?: CanvasTextAlign;
+    baseline?: CanvasTextBaseline;
+  } = {}
+) {
+  ctx.save();
+  ctx.font = opts.font ?? '400 21px "Goldman"';
+  ctx.fillStyle = opts.fill ?? '#fff';
+  ctx.textAlign = opts.align ?? 'center';
+  ctx.textBaseline = opts.baseline ?? 'middle';
+  if (opts.stroke) {
+    ctx.strokeStyle = opts.stroke;
+    ctx.lineWidth = opts.strokeWidth ?? 3;
+    ctx.strokeText(text, x, y);
+  }
+  
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}

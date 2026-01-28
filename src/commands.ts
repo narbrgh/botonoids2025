@@ -1,4 +1,7 @@
-import type { DirType } from "./protocol";
+import type { DirType, Role } from "./protocol";
+
+// commands are sent from the client to the server. this is the only message type from client -> server at the moment
+
 
 export type Command = 
     | { type: 'input'; dir: DirType | null }
@@ -8,3 +11,4 @@ export type Command =
     | { type: 'actionUp' }
     | { type: 'changeItem' }
     | { type: 'useItem'}
+    | { type: 'ready'; role: Role }

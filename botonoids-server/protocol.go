@@ -47,6 +47,16 @@ type ClientMsg struct {
 	Seq  int             `json:"seq,omitempty"` // Sequence number sent by the client. This can later be used for acknowledgments, ordering, or prediction reconciliation.
 }
 
+// ----------------------0-0-0-0-0-0--0-0-0-one-0--==-------------
+// Client -> server room phase messages --00-0-199-=-======-------
+// ------------             -------   ---------- --=-=-==-=-------
+// ------role can be gold, white, silver, or black bot. Future: observer -------
+
+type ReadyCmd struct {
+	Type string `json:"type"`
+	Role Role   `json:"role"`
+}
+
 // ─────────────────────────────--------
 // Command queue (Client → Tick loop)
 // ─────────────────────────────--------

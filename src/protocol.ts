@@ -4,8 +4,13 @@ import type TileMap from "./TileMap";
 export type DirType = 'up' | 'down' | 'left' | 'right';
 export type InputCmd = { type: 'input'; dir: DirType | null };
 export type BotonoidMode = 'walking' | 'colorChanging' | 'wallBuilding' | 'ghost' | 'cooldown';
+export type Role = 'goldBot' | 'silverBot' | 'whiteBot' | 'blackBot' | 'randomBot'; // | 'observer';
+export type Phase = 'phaseLobby' | 'phaseCountdown' | 'phasePlaying' | 'phaseFinished';
 
 export type SnapshotPlayer = {
+  //TODO (later): implement phase (and other gamestate messages) into its own message type, such as RoomStateMsg
+  phase: Phase;
+
   id: number;
   x: number;
   y: number;
@@ -48,14 +53,14 @@ export type SnapshotTileMap = {
 export type PlayerSnapshotMsg = {
   type: 'playerSnapshot'; // formerly just said 'snapshot'
   tick: number;
-  phase: 'lobby' | 'countdown' | 'playing' | 'finished';
+  phase: Phase;
   players: SnapshotPlayer[];
 };
 
 export type TileMapSnapshotMsg = {
   type: 'tileMapSnapshot'; // formerly just said 'snapshot'
   tick: number;
-  phase: 'lobby' | 'countdown' | 'playing' | 'finished';
+  phase: Phase;
   tileMap: SnapshotTileMap;
 };
 

@@ -60,7 +60,7 @@ func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
 	if room.Phase != PhasePlaying {
 		//only process non-playing commands
 		if typ == "ready" {
-			//handle ready here
+			p.Ready = true
 		}
 		return
 	}

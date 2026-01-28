@@ -3,6 +3,7 @@ package main
 type DirType string
 type ModeType string
 type Phase string
+type Role string
 
 const (
 	Up    DirType = "up"
@@ -20,10 +21,19 @@ const (
 )
 
 const (
-	PhaseLobby     Phase = "lobby"
-	PhaseCountdown Phase = "countdown"
-	PhasePlaying   Phase = "playing"
-	PhaseFinished  Phase = "finished"
+	PhaseLobby     Phase = "phaseLobby"
+	PhaseCountdown Phase = "phaseCountdown"
+	PhasePlaying   Phase = "phasePlaying"
+	PhaseFinished  Phase = "phaseFinished"
+)
+
+const (
+	RoleGoldBot   Role = "goldBot"
+	RoleSilverBot Role = "silverBot"
+	RoleWhiteBot  Role = "whiteBot"
+	RoleBlackBot  Role = "blackBot"
+	RoleRandomBot Role = "randomBot"
+	//RoleObserver Role = "observer"
 )
 
 func makeConfig() ConfigMsg {

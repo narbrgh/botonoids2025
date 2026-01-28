@@ -285,6 +285,7 @@ func runGameLoop(room *Room) {
 		}
 
 		// 6) Updaters. (tile, player, etc)
+		room.UpdatePhase()
 		room.Map.Update(room.Tick)
 
 		for _, p := range room.Players {

@@ -6,6 +6,7 @@ export type InputCmd = { type: 'input'; dir: DirType | null };
 export type BotonoidMode = 'walking' | 'colorChanging' | 'wallBuilding' | 'ghost' | 'cooldown';
 export type Role = 'goldBot' | 'silverBot' | 'whiteBot' | 'blackBot' | 'randomBot'; // | 'observer';
 export type Phase = 'phaseLobby' | 'phaseCountdown' | 'phasePlaying' | 'phaseFinished';
+export type RoleInvalidMsg = { type: 'roleInvalid'; playerId: number; msg?: string };
 
 export type SnapshotPlayer = {
   //TODO (later): implement phase (and other gamestate messages) into its own message type, such as RoomStateMsg

@@ -32,10 +32,11 @@ type PlayerState struct { // this is the struct that gets sent through the proto
 	CooldownDurTicks    uint64   `json:"cooldownDurTicks"`
 
 	// variables for Phase and game flow
-	Ready bool `json:"ready"`
-	// TODO here is where i will add what color the player chooses, or if they've chosen to be an observer
-	// Selection SelectionType `json:"selection"` // something like gold, silver, or white
+	Ready            bool   `json:"ready"`
+	SelectedRole     Role   `json:"role"`
+	TickSelectedRole uint64 `json:"-"`
 
+	//server-side bool to keep track of if the action button is UP or DOWN
 	ActionPressed bool `json:"-"`
 }
 
@@ -60,7 +61,23 @@ func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
 	if room.Phase != PhasePlaying {
 		//only process non-playing commands
 		if typ == "ready" {
+			cmd, err := decodeReadyCmd(qc.Cmd)
+			if err != nil {
+				return
+			}
+
+			//first make sure the selected role is available
+			if room.RoleTaken[cmd.Role] && cmd.Role != RoleObserver && cmd.Role != RoleRandomBot {
+
+				if cl, ok := room.Clients[qc.PlayerID]; ok {
+					sendJSON(cl, ServerMsg{Type: "roleInvalid", Msg: "role taken"})
+				}
+				return
+			}
+			room.RoleTaken[cmd.Role] = true
 			p.Ready = true
+			p.SelectedRole = cmd.Role
+			p.TickSelectedRole = room.Tick // keep track of WHEN the player selected their role, because if they weren't first, they don't get it!
 		}
 		return
 	}

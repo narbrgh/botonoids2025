@@ -53,9 +53,34 @@ type ClientMsg struct {
 // ------role can be gold, white, silver, or black bot. Future: observer -------
 
 type ReadyCmd struct {
-	Type string `json:"type"`
-	Role Role   `json:"role"`
+	Type string `json:"type"` // "facing"
+	Role Role   `json:"role"` // gold, silver, black, white, or observer
 }
+
+func decodeReadyCmd(raw json.RawMessage) (ReadyCmd, error) {
+	var cmd ReadyCmd
+	err := json.Unmarshal(raw, &cmd)
+	return cmd, err
+}
+
+//////000000000000-----------------
+// server -> client messages regarding lobby messages (role not available etc)
+// -0--- -00- 0-32r40-230-30-4 230- asd-0fdslk ;fadsjlk
+//-------------------------00000000000000000000000---------
+
+//TODO add a message that the server sends all clients, where it tells them the current state of role selection
+
+/*
+type RoleInvalidMsg struct {
+	Type     string `json:"type"` //roleInvalid
+	PlayerID int    `json:"playerID"`
+}
+
+func encodeRoleInvalidMsg(playerID int) ([]byte, error) {
+	msg := RoleInvalidMsg{Type: "roleInvalid", PlayerID: playerID}
+	return json.Marshal(msg)
+}
+*/
 
 // ─────────────────────────────--------
 // Command queue (Client → Tick loop)

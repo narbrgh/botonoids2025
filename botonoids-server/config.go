@@ -33,7 +33,7 @@ const (
 	RoleWhiteBot  Role = "whiteBot"
 	RoleBlackBot  Role = "blackBot"
 	RoleRandomBot Role = "randomBot"
-	//RoleObserver Role = "observer"
+	RoleObserver  Role = "observer"
 )
 
 func makeConfig() ConfigMsg {

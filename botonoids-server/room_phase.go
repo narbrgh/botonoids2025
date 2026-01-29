@@ -30,6 +30,9 @@ func (r *Room) startCountdown() {
 }
 
 func (r *Room) startGame() {
+
+	//first, make each player get their correct graphics based on role (and later skin)
+
 	r.Phase = PhasePlaying
 	r.PhaseEndsAtTick = r.Tick + phaseCfg.GameDurTicks
 	// TODO: reset map / players here
@@ -38,9 +41,13 @@ func (r *Room) startGame() {
 func (r *Room) resetToLobby() {
 	r.Phase = PhaseLobby
 	r.PhaseEndsAtTick = 0
+
+	r.RoleTaken = map[Role]bool{RoleGoldBot: false, RoleSilverBot: false, RoleWhiteBot: false, RoleBlackBot: false}
+
 	for _, p := range r.Players {
 		p.Ready = false
 		p.Mode = Walking
+		p.SelectedRole = RoleObserver
 	}
 }
 
@@ -52,6 +59,7 @@ func (r *Room) enterResultsScreen() {
 func (r *Room) UpdatePhase() {
 	switch r.Phase {
 	case PhaseLobby:
+
 		if len(r.Players) >= phaseCfg.MinPlayers && r.allReady() {
 			r.startCountdown()
 		}

@@ -122,6 +122,11 @@ net.onConfig = (c) => {
   clock.updateConfig(c.tickHz);
 }
 
+net.onRoleInvalid = (m) => {
+  console.log('role invalid', m);
+  //TODO add invalid role selection code
+}
+
 let lastDir: DirType | null = null;
 
 new GameLoop(update, render).start();
@@ -202,7 +207,23 @@ function render() {
 
       break;
     }
-    case 'phaseCountdown': case 'phasePlaying': {
+    case 'phaseCountdown': {
+      tileMap.draw(ctx, nowMs);
+
+      for (const bot of botsById.values()) {
+        bot.draw(ctx, nowMs);
+      }
+
+      drawText(ctx, '3 2 1 GO', canvas.width/2, canvas.height/2, {
+        font: '400 88 px "Goldman"',
+        stroke: '#000',
+        strokeWidth: 8,
+      });
+      
+      break;
+    }
+    
+    case 'phasePlaying': {
       tileMap.draw(ctx, nowMs);
 
       for (const bot of botsById.values()) {

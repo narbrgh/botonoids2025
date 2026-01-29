@@ -1,5 +1,5 @@
 import type { Command } from '../commands';
-import type { PlayerSnapshotMsg, TileMapSnapshotMsg, ConfigMsg, TileChangeMsg, TileInitiateChangeMsg, TileChangeListMsg} from '../protocol';
+import type { PlayerSnapshotMsg, TileMapSnapshotMsg, ConfigMsg, TileChangeMsg, TileInitiateChangeMsg, TileChangeListMsg, RoleInvalidMsg} from '../protocol';
 
 type HelloMsg = { type: 'hello'; playerId: number; msg?: string };
 
@@ -25,6 +25,7 @@ export default class NetClient {
     { guard: this.isTileChangeMsg, handle: (m: TileChangeMsg) => { this.onTileChange?.(m); } },
     { guard: this.isTileChangeListMsg, handle: (m: TileChangeListMsg) => {this.onTileChangeList?.(m); }},
     { guard: this.isTileInitiateChangeMsg, handle: (m: TileInitiateChangeMsg) => { this.onTileInitiateChange?.(m); } },
+    { guard: this.isRoleInvalidMsg,  handle: (m: RoleInvalidMsg) => { this.onRoleInvalid?.(m); } },
   ];
 
 
@@ -132,6 +133,12 @@ export default class NetClient {
       && typeof (x as any).moveTicks === 'number';
   }
 
+  private isRoleInvalidMsg(x: unknown): x is RoleInvalidMsg {
+    return typeof x === 'object' && x !== null
+     && (x as any).type === 'roleInvalid'
+     && typeof (x as any).playerId === 'number';
+  }
+
   //my convention: use s for snapshot, c for config, m for messge
   onPlayerSnapshot?: (s: PlayerSnapshotMsg) => void;
   onTileMapSnapshot?: (s: TileMapSnapshotMsg) => void;
@@ -139,8 +146,7 @@ export default class NetClient {
   onTileChange?: (m: TileChangeMsg) => void;
   onTileChangeList?: (m: TileChangeListMsg) => void;
   onTileInitiateChange?: (m: TileInitiateChangeMsg) => void;
-
-  
+  onRoleInvalid?: (m: RoleInvalidMsg) => void;  
 
   sendCommand(cmd: Command) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;

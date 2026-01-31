@@ -18,33 +18,38 @@
       <div class="lobby-card">
         <h1>Lobby</h1>
         <p>Press Enter</p>
-        <!-- add inputs/buttons here later -->
+        <!-- add inputs/buttons here  -->
          <div id="lobby">
           <div class="lobby-panel">
 
             <div class="lobby-col lobby-left">
-              <h2>Select Botonoid</h2>
+              <h3>Select Botonoid</h3>
 
-              <div class="botonoid-preview">
-                <!-- TS will draw over this area -->
+              <div class="color-row">
+                <div class="color-col">
+                  <button class="gold role-btn">Gold</button>
+                  <button class="silver role-btn">Silver</button>
+                </div>
+                <div class="botonoid-preview">
+                  <!-- TS will draw over this area -->
+                </div>
+                <div class="color-col">
+                  <button class="white role-btn">White</button>
+                  <button class="black role-btn">Black</button>
+                </div>
+              </div>
+              
+
+              <div class="section">
+            
+                <div class="btn-row">
+                  <button class="randomColor role-btn">Random color</button>
+                  <button class="role-btn">Observer</button>
+                </div>
               </div>
 
               <div class="section">
-                <div class="label">Color</div>
-                <div class="btn-row">
-                  <button>Gold</button>
-                  <button>Silver</button>
-                  <button>White</button>
-                  <button>Black</button>
-                </div>
-                <div class="btn-row">
-                  <button>Random</button>
-                  <button>Observer</button>
-                </div>
-              </div>
-
-              <div class="section">
-                <div class="label">Skin</div>
+                <div class="label">Robot model</div>
                 <div class="btn-row">
                   <button>Alphanoid</button>
                   <button>Herbanoid</button>
@@ -52,6 +57,18 @@
                 </div>
               </div>
 
+              <div class="section">
+                <div class="label">Player status</div>
+                <div class="players-grid">
+                  <!-- 3 x 2 grid items -->
+                  <div class="player-card"></div>
+                  <div class="player-card"></div>
+                  <div class="player-card"></div>
+                  <div class="player-card"></div>
+                  <div class="player-card">Player 5</div>
+                  <div class="player-card">Player 6</div>
+                </div>
+              </div>
               <div class="section ready-row">
                 <button class="ready-btn">Ready</button>
                 <span class="ready-status">✔ waiting for others...</span>
@@ -59,27 +76,22 @@
             </div>
 
             <div class="lobby-col lobby-right">
-              <h2>Enter Name</h2>
-              <input type="text" placeholder="Your name" />
-
-              <div class="section">
-                <div class="label">Players</div>
-                <div class="players-grid">
-                  <!-- 3 x 2 grid items -->
-                  <div class="player-card">Player 1</div>
-                  <div class="player-card">Player 2</div>
-                  <div class="player-card">Player 3</div>
-                  <div class="player-card">Player 4</div>
-                  <div class="player-card">Player 5</div>
-                  <div class="player-card">Player 6</div>
-                </div>
+              <h3>Enter Name
+              <div class="row">
+                <input type="text" placeholder="Your name" />
+                <button>Set</button>
               </div>
+              </h3>
 
               <div class="section chat-section">
                 <div class="label">Chat</div>
                 <div class="chat-log"></div>
-                <input type="text" class="chat-input" placeholder="Type message..." />
+                <div class="row">
+                  <input type="text" class="chat-input" placeholder="Type message..." />
+                  <button>Send</button>
+                </div>
               </div>
+              
             </div>
 
           </div>

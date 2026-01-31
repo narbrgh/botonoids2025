@@ -204,7 +204,7 @@ function render() {
 
   switch (currentPhase) {
     case 'phaseLobby': {
-        //here draw the selected Botonoid in the correct location
+        //TODO here draw the selected Botonoid in the correct location
       break;
     }
     case 'phaseCountdown': {

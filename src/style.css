@@ -21,12 +21,13 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  --accentColor: #2b76a9;
 }
 
 html, body {
   margin: 0;
   height: 100%;
-  background: #111;
+  background: #000000;
 }
 
 body {
@@ -54,8 +55,11 @@ canvas#game {
   display: flex;            /* toggle to none when not in lobby */
   align-items: center;
   justify-content: center;
-  color: rgb(43, 118, 169);
-  background: #0e0e0e;
+  color: rgb(101, 140, 146);
+  background: #281d1d;
+  border: 2px solid var(--accentColor);
+  box-sizing: border-box;
+
 }
 
 .lobby-panel {
@@ -74,16 +78,36 @@ canvas#game {
   gap: 16px;
 }
 
+h3 {
+  margin: 4px 0;
+}
+
 .botonoid-preview {
-  height: 180px;
-  border: 1px solid #333;
+  height: 100px;
+  width: 100px;
+  border: 1px solid var(--accentColor);
   background: #0c0c0c;
+  align-self: center;
+}
+
+.color-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+}
+
+.color-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .btn-row {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 40px;
+  flex-wrap: nowrap;
+  justify-content: center;
 }
 
 .players-grid {
@@ -93,10 +117,11 @@ canvas#game {
 }
 
 .player-card {
+  height: 20px;
   background: #1a1a1a;
-  border: 1px solid #333;
+  border: 1px solid var(--accentColor);
   padding: 8px;
-  text-align: center;
+  text-align: left;
 }
 
 .chat-section {
@@ -109,13 +134,14 @@ canvas#game {
 .chat-log {
   flex: 1;
   background: #0c0c0c;
-  border: 1px solid #333;
+  border: 1px solid var(--accentColor);
   padding: 8px;
   overflow-y: auto;
+
 }
 
 .chat-input {
-  border: 1px solid #333;
+  border: 1px solid var(--accentColor);
   background: #111;
   color: white;
   padding: 8px;
@@ -129,4 +155,62 @@ canvas#game {
   border-radius: 8px;
   border: 1px solid #333;
   text-align: center;
+}
+
+button {
+  font-family: inherit;
+  font-weight: 700;
+
+  color: #86bfcd;
+  background: transparent; /* "outline" mode is default */
+  border: 2px solid var(--accentColor);
+
+  padding: 10px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.2s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+}
+
+button:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* optional variants */
+button.gold {  background: #f5c542; color: #111}
+button.silver { background: #c0c0c0; color: #111}
+button.white { background: #f2f2f2; color: #111}
+button.black { background: #1f1f1f; color: #f2f2f2; border: 1px solid #444; }
+button.randomColor {
+  color: #111;
+  background: linear-gradient(
+    110deg,
+    #ff3b3b 0%,
+    #ff9f1a 20%,
+    #ffd60a 40%,
+    #33d17a 60%,
+    #3b82f6 80%,
+    #a855f7 100%
+  )
+}
+
+/* role buttons are the ones choosing color, or random color, or observer */
+/* they should all have the same size text */
+
+button.role-btn {
+  font-size: 14px;
+  padding: 8px 14px;
+  min-height: 40px;
+  width: auto;
+  white-space: nowrap;
+}
+
+button.ready-btn {
+  font-size: 20px;
+  padding: 10px 20px;
 }

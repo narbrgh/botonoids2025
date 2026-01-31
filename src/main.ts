@@ -29,7 +29,9 @@ const ctxEl = canvas.getContext('2d');
 if (!ctxEl) throw new Error('2D context not available');
 const ctx = ctxEl;
 
-ctx.imageSmoothingEnabled = false;
+ctx.imageSmoothingEnabled = false
+
+const lobby = document.getElementById("lobby")!;
 
 const cols = Math.floor(canvas.width / TILE_SIZE);
 const rows = Math.floor(canvas.height / TILE_SIZE);
@@ -196,6 +198,8 @@ function render() {
 
   ctx.fillStyle = '#313642ff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  lobby.style.display = (currentPhase === 'phaseLobby') ? "flex" : "none";
 
   switch (currentPhase) {
     case 'phaseLobby': {

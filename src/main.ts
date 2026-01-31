@@ -199,16 +199,12 @@ function render() {
   ctx.fillStyle = '#313642ff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  //turn on or off the lobby GUI depending on current phase
   lobby.style.display = (currentPhase === 'phaseLobby') ? "flex" : "none";
 
   switch (currentPhase) {
     case 'phaseLobby': {
-    drawText(ctx, 'lobby: press Enter when ready', canvas.width/2, canvas.height/2, {
-      font: '400 20px "Goldman"',
-      stroke: '#000',
-      strokeWidth: 4,
-    });
-
+        //here draw the selected Botonoid in the correct location
       break;
     }
     case 'phaseCountdown': {

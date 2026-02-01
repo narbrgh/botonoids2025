@@ -205,7 +205,57 @@ button.randomColor {
 button.role-btn {
   font-size: 14px;
   padding: 8px 14px;
-  min-height: 40px;
+  height: 40px;
+  width: auto;
+  white-space: nowrap;
+  justify-content: center;
+  align-items: center;
+  display: flex;
+  opacity: 0.6;
+}
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 2px #fff inset, 0 0 10px rgba(43,118,169,0.6); }
+  50% { box-shadow: 0 0 0 2px #fff inset, 0 0 18px rgba(43,118,169,0.9); }
+  100% { box-shadow: 0 0 0 2px #fff inset, 0 0 10px rgba(43,118,169,0.6); }
+}
+
+button.role-btn.selected {
+  opacity: 1;
+  border-color: #FFF;
+  font-size: 20px;
+  border-width: 4px;
+  animation: pulse 1.2s infinite;
+  transform: scale(1.08);
+  box-shadow:
+   0 0 0 3px #fff,
+   0 0 12px rgba(255,255,255,0.6);
+}
+
+button.selected::after {
+  content: "✔";
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  width: 20px;
+  height: 20px;
+  background: #00ff6a;
+  color: #111;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  box-shadow: 0 0 6px rgba(0,255,106,0.7);
+}
+
+button:disabled {
+  opacity: 0.2;
+  cursor: not-allowed;
+}
+
+button.model-btn {
+  font-size: 14px;
+  padding: 10px 13px;
+  height: 45px;
   width: auto;
   white-space: nowrap;
 }
@@ -219,7 +269,7 @@ button.ready-btn {
 }
 
 button.ready-btn.selected {
-  font-size: 24px;
+  font-size: 25px;
   padding: 10px 20px;
   background: rgba(35, 118, 200, 0.867);
   box-shadow: 0 0 0 2px #111 inset;

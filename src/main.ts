@@ -35,7 +35,7 @@ ctx.imageSmoothingEnabled = false
 const lobby = document.getElementById("lobby")!;
 initLobbyUI((e) => {
   if (e.type === "ready") {
-    //net.sendCommand({type: "ready", role: e.role, ready: e.ready});
+        net.sendCommand({ type: 'ready', role: 'randomBot' });
   }
 });
 

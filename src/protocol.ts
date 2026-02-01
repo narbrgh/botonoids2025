@@ -4,9 +4,16 @@ import type TileMap from "./TileMap";
 export type DirType = 'up' | 'down' | 'left' | 'right';
 export type InputCmd = { type: 'input'; dir: DirType | null };
 export type BotonoidMode = 'walking' | 'colorChanging' | 'wallBuilding' | 'ghost' | 'cooldown';
-export type Role = 'goldBot' | 'silverBot' | 'whiteBot' | 'blackBot' | 'randomBot' | 'observer';
+
 export type Phase = 'phaseLobby' | 'phaseCountdown' | 'phasePlaying' | 'phaseFinished';
 export type RoleInvalidMsg = { type: 'roleInvalid'; playerId: number; msg?: string };
+
+export const roles = ["goldBot", "silverBot", "whiteBot", "blackBot", "randomBot", "observer"] as const;
+export type Role = typeof roles[number];
+
+export function isRole(v: string): v is Role {
+  return (roles as readonly string[]).includes(v);
+}
 
 export type SnapshotPlayer = {
   //TODO (later): implement phase (and other gamestate messages) into its own message type, such as RoomStateMsg

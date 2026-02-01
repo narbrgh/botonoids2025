@@ -27,15 +27,15 @@
 
               <div class="color-row">
                 <div class="color-col">
-                  <button class="gold role-btn">Gold</button>
-                  <button class="silver role-btn">Silver</button>
+                  <button class="gold role-btn" data-model="goldBot">Gold</button>
+                  <button class="silver role-btn" data-model="silverBot">Silver</button>
                 </div>
                 <div class="botonoid-preview">
                   <!-- TS will draw over this area -->
                 </div>
                 <div class="color-col">
-                  <button class="white role-btn">White</button>
-                  <button class="black role-btn">Black</button>
+                  <button class="white role-btn" data-model="whiteBot">White</button>
+                  <button class="black role-btn" data-model="blackBot">Black</button>
                 </div>
               </div>
               
@@ -43,30 +43,31 @@
               <div class="section">
             
                 <div class="btn-row">
-                  <button class="randomColor role-btn">Random color</button>
-                  <button class="role-btn">Observer</button>
+                  <button class="randomColor role-btn selected" data-model="randomBot">Random color</button>
+                  <button class="role-btn" data-model="observer">Observer</button>
                 </div>
               </div>
 
               <div class="section">
                 <div class="label">Robot model</div>
                 <div class="btn-row">
-                  <button>Alphanoid</button>
-                  <button>Herbanoid</button>
-                  <button>Barvinoid</button>
+                  <button class="model-btn" data-model="alphanoid">Alphanoid</button>
+                  <button class="model-btn" data-model="herbanoid">Herbanoid</button>
+                  <button class="model-btn" data-model="barvinoid">Barvinoid</button>
+                  <button class="model-btn" data-model="randomnoid">Random model</button>
                 </div>
               </div>
 
               <div class="section">
-                <div class="label">Player status</div>
+                <div class="label">Players</div>
                 <div class="players-grid">
                   <!-- 3 x 2 grid items -->
-                  <div class="player-card"></div>
-                  <div class="player-card"></div>
-                  <div class="player-card"></div>
-                  <div class="player-card"></div>
-                  <div class="player-card">Player 5</div>
-                  <div class="player-card">Player 6</div>
+                  <div class="player-card">-</div>
+                  <div class="player-card">-</div>
+                  <div class="player-card">-</div>
+                  <div class="player-card">-</div>
+                  <div class="player-card">-</div>
+                  <div class="player-card">-</div>
                 </div>
               </div>
               <div class="section ready-row">

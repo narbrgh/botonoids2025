@@ -11,8 +11,15 @@ export type RoleInvalidMsg = { type: 'roleInvalid'; playerId: number; msg?: stri
 export const roles = ["goldBot", "silverBot", "whiteBot", "blackBot", "randomBot", "observer"] as const;
 export type Role = typeof roles[number];
 
+export const models = ["alphanoid","herbanoid","barvinoid","randomnoid"] as const;
+export type Model = typeof models[number];
+
 export function isRole(v: string): v is Role {
   return (roles as readonly string[]).includes(v);
+}
+
+export function isModel(v: string): v is Model {
+  return (models as readonly string[]).includes(v);
 }
 
 export type SnapshotPlayer = {

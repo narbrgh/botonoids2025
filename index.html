@@ -18,10 +18,11 @@
       <div class="lobby-card">
         <h1>Lobby</h1>
         <p>Press Enter</p>
-        <!-- add inputs/buttons here  -->
-         <div id="lobby">
+
+        <div id="lobby">
           <div class="lobby-panel">
 
+            <!-- LEFT COLUMN -->
             <div class="lobby-col lobby-left">
               <h3>Select Botonoid</h3>
 
@@ -31,7 +32,7 @@
                   <button class="silver role-btn" data-model="silverBot">Silver</button>
                 </div>
                 <div class="botonoid-preview">
-                  <!-- TS will draw over this area -->
+                  <canvas id="botonoid-preview-canvas" width="96" height="96"></canvas>
                 </div>
                 <div class="color-col">
                   <button class="white role-btn" data-model="whiteBot">White</button>
@@ -43,6 +44,7 @@
               <div class="section">
             
                 <div class="btn-row">
+                  <!-- randomColor is the default, so that's why it has the "selected" class to start -->
                   <button class="randomColor role-btn selected" data-model="randomBot">Random color</button>
                   <button class="role-btn" data-model="observer">Observer</button>
                 </div>
@@ -50,11 +52,11 @@
 
               <div class="section">
                 <div class="label">Robot model</div>
-                <div class="btn-row">
-                  <button class="model-btn" data-model="alphanoid">Alphanoid</button>
+                <div class="btn-row model-row">
+                  <button class="model-btn selected" data-model="alphanoid">Alphanoid</button>
                   <button class="model-btn" data-model="herbanoid">Herbanoid</button>
                   <button class="model-btn" data-model="barvinoid">Barvinoid</button>
-                  <button class="model-btn" data-model="randomnoid">Random model</button>
+                  <button class="model-btn randomnoid" data-model="randomnoid">Randomnoid</button>
                 </div>
               </div>
 
@@ -76,6 +78,7 @@
               </div>
             </div>
 
+            <!-- RIGHT COLUMN -->
             <div class="lobby-col lobby-right">
               <h3>Enter Name
               <div class="row">

@@ -90,6 +90,13 @@ h3 {
   align-self: center;
 }
 
+#botonoid-preview-canvas {
+  width: 96px;
+  height: 96px;
+  display: block;
+  image-rendering: pixelated;
+}
+
 .color-row {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -106,6 +113,13 @@ h3 {
 .btn-row {
   display: flex;
   gap: 40px;
+  flex-wrap: nowrap;
+  justify-content: center;
+}
+
+.btn-row.model-row {
+  display: flex;
+  gap: 6px;
   flex-wrap: nowrap;
   justify-content: center;
 }
@@ -254,10 +268,23 @@ button:disabled {
 
 button.model-btn {
   font-size: 14px;
-  padding: 10px 13px;
-  height: 45px;
-  width: auto;
+  padding: 0px 0px;
+  height: 40px;
+  width: 100px;
   white-space: nowrap;
+}
+
+button.model-btn.randomnoid {
+  width: 110px;
+}
+
+button.model-btn.selected {
+  opacity: 1;
+  border-color: #FFF;
+  font-size: 15px;
+  border-width: 4px;
+  transform: scale(1.04);
+
 }
 
 button.ready-btn {

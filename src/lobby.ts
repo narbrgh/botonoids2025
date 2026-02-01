@@ -1,7 +1,7 @@
 //lobby.ts
 
-import type {  Role } from './protocol';
-import { isRole } from './protocol';
+import type {  Role, Model } from './protocol';
+import { isRole, isModel } from './protocol';
 
 export type LobbyEvent = 
 | {type: "ready"; ready: boolean; role: Role}
@@ -12,12 +12,14 @@ type LobbyState = {
     name: string;
     role: Role;
     ready: boolean;
+    model: Model;
 }
 
 export const lobbyState: LobbyState = {
     name: "",
     role: "randomBot",
     ready: false,
+    model: "alphanoid",
 };
 export function initLobbyUI(onEvent: (e: LobbyEvent) => void) {
     const nameInput = document.querySelector<HTMLInputElement>("#name-input");
@@ -66,6 +68,18 @@ export function initLobbyUI(onEvent: (e: LobbyEvent) => void) {
             const model = btn.dataset.model;
             //update state + send event
             console.log("Model button pressed:", model);
+
+            if (model && isModel(model)) {
+                lobbyState.model = model;
+
+                //remove selected from all
+                document.querySelectorAll<HTMLButtonElement>(".model-btn").forEach(b => {
+                    b.classList.remove("selected");
+                });
+
+                //now add selected to the correct one
+                btn.classList.add("selected")
+            }
         });
     });
 }

@@ -7,7 +7,7 @@ import { resources } from './Resources';
 import TileMap from './TileMap';
 import Botonoid from './Botonoid';
 import type { PlayerSnapshotMsg, TileMapSnapshotMsg, TileChangeMsg , TileInitiateChangeMsg, TileChangeListMsg} from './protocol'
-import type { Phase , Role } from './protocol';
+import type { Phase , Role , Model } from './protocol';
 import {initLobbyUI, lobbyState } from "./lobby";
 
 
@@ -22,6 +22,8 @@ import ServerClock from './ServerClock';
 import './style.css'
 //import type { Command } from './commands';
 
+
+//Set up main canvas element
 const canvasEl = document.getElementById('game');
 if (!(canvasEl instanceof HTMLCanvasElement)) throw new Error('Canvas #game not found');
 const canvas = canvasEl;
@@ -31,6 +33,18 @@ if (!ctxEl) throw new Error('2D context not available');
 const ctx = ctxEl;
 
 ctx.imageSmoothingEnabled = false
+
+
+//Set up small canvas element that draws the botonoid preview in the lobby screen
+const previewCanvasEl = document.getElementById('botonoid-preview-canvas');
+if (!(previewCanvasEl instanceof HTMLCanvasElement)) throw new Error('Canvas #previewCanvas not found');
+const previewCanvas = previewCanvasEl;
+
+const previewCtxEl = previewCanvas.getContext('2d');
+if (!previewCtxEl) throw new Error ('2D context of preview canvas not available');
+const previewCtx = previewCtxEl;
+previewCtx.imageSmoothingEnabled = false
+
 
 const lobby = document.getElementById("lobby")!;
 initLobbyUI((e) => {
@@ -152,6 +166,17 @@ function spriteForPlayer(skin: 'gold' | 'silver'): Sprite {
   });
 }
 
+function spriteForPreview(role: Role, model: Model): Sprite {
+  return new Sprite({
+    resource: resources.images.goldBot,
+    frameSize: new Vector2(32, 32),
+    hFrames: 1,
+    vFrames: 4,
+    frame: 2,
+    scale: 2,
+  })
+}
+
 function drivePlayer(controller: KeyboardController, player: Botonoid, dt: number) {
   // buttons (action/changeItem/useItem) — Botonoid ignores for now, but you’ll later route these
   for (const cmd of controller.consumeCommands()) {
@@ -211,6 +236,16 @@ function render() {
   switch (currentPhase) {
     case 'phaseLobby': {
         //TODO here draw the selected Botonoid in the correct location
+        if (previewCtx && previewCanvas) {
+          previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+          const sprite = spriteForPreview(lobbyState.role, lobbyState.model);
+          const w = 32 * sprite.scale;
+          const h = 32 * sprite.scale;
+          const x = Math.floor((previewCanvas.width-w)/2);
+          const y = Math.floor((previewCanvas.height-h) / 2);
+          sprite.drawImage(previewCtx, x, y);
+        }
+
       break;
     }
     case 'phaseCountdown': {

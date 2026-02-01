@@ -10,6 +10,7 @@ import type { PlayerSnapshotMsg, TileMapSnapshotMsg, TileChangeMsg , TileInitiat
 import type { Phase , Role , Model } from './protocol';
 import {initLobbyUI, lobbyState } from "./lobby";
 
+import {frameForBot, BOT_SHEET} from './botonoidSheet'
 
 import { TILE_SIZE, FRAME_SIZE, MOVE_DURATION_MS} from './Constants';
 
@@ -168,11 +169,11 @@ function spriteForPlayer(skin: 'gold' | 'silver'): Sprite {
 
 function spriteForPreview(role: Role, model: Model): Sprite {
   return new Sprite({
-    resource: resources.images.goldBot,
+    resource: resources.images.bots,
     frameSize: new Vector2(32, 32),
-    hFrames: 1,
-    vFrames: 4,
-    frame: 2,
+    hFrames: BOT_SHEET.cols,
+    vFrames: BOT_SHEET.rows,
+    frame: frameForBot(role, model, "down"),
     scale: 2,
   })
 }
@@ -235,15 +236,56 @@ function render() {
 
   switch (currentPhase) {
     case 'phaseLobby': {
-        //TODO here draw the selected Botonoid in the correct location
         if (previewCtx && previewCanvas) {
           previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
-          const sprite = spriteForPreview(lobbyState.role, lobbyState.model);
-          const w = 32 * sprite.scale;
-          const h = 32 * sprite.scale;
-          const x = Math.floor((previewCanvas.width-w)/2);
-          const y = Math.floor((previewCanvas.height-h) / 2);
-          sprite.drawImage(previewCtx, x, y);
+          let roleToSend = lobbyState.role;
+          let modelToSend = lobbyState.model;
+
+          if (roleToSend == "observer") {
+            //TODO draw observer here
+          } else if (roleToSend === "randomBot") {
+            //cycles every second between the colors
+            const index = Math.floor(nowMs / 1000) % 4;
+            switch (index) {
+              case 0:
+                roleToSend = "goldBot";
+                break;
+              case 1:
+                roleToSend = "silverBot";
+                break;
+              case 2:
+                roleToSend = "whiteBot";
+                break;
+              default:
+                roleToSend = "blackBot";
+                break;
+            } 
+          }
+
+          if (modelToSend == "randomnoid") {
+            //cycles every second between the models; offset by a half second from the color cycling
+            const index = Math.floor((nowMs+500) / 1000) % 3;
+            switch (index) {
+              case 0:
+                modelToSend = "alphanoid"
+                break;
+              case 1:
+                modelToSend = "herbanoid";
+                break;
+              default:
+                modelToSend = "barvinoid";
+                break;
+            } 
+          }
+
+          if (roleToSend != "observer") {
+            const sprite = spriteForPreview(roleToSend, modelToSend);
+            const w = 32 * sprite.scale;
+            const h = 32 * sprite.scale;
+            const x = Math.floor((previewCanvas.width-w)/2);
+            const y = Math.floor((previewCanvas.height-h) / 2);
+            sprite.drawImage(previewCtx, x, y);
+          }
         }
 
       break;

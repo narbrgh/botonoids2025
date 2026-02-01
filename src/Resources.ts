@@ -4,6 +4,7 @@ export const toLoad = {
   tiles: "/sprites/tiles.png",
   goldBot: "/sprites/goldBot.png",
   silverBot: "/sprites/silverBot.png",
+  bots: "/sprites/bots.png",
 } as const;
 
 export type ResourceKey = keyof typeof toLoad;

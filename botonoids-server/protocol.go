@@ -53,8 +53,9 @@ type ClientMsg struct {
 // ------role can be gold, white, silver, or black bot. Future: observer -------
 
 type ReadyCmd struct {
-	Type string `json:"type"` // "facing"
-	Role Role   `json:"role"` // gold, silver, black, white, or observer
+	Type  string `json:"type"`  // "ready"
+	Role  Role   `json:"role"`  // RoleGoldBot etc
+	Model Model  `json:"model"` // ModelAlphanoid etc
 }
 
 func decodeReadyCmd(raw json.RawMessage) (ReadyCmd, error) {

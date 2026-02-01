@@ -34,6 +34,7 @@ type PlayerState struct { // this is the struct that gets sent through the proto
 	// variables for Phase and game flow
 	Ready            bool   `json:"ready"`
 	SelectedRole     Role   `json:"role"`
+	SelectedModel    Model  `json:"model"`
 	TickSelectedRole uint64 `json:"-"`
 
 	//server-side bool to keep track of if the action button is UP or DOWN
@@ -77,6 +78,7 @@ func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
 			room.RoleTaken[cmd.Role] = true
 			p.Ready = true
 			p.SelectedRole = cmd.Role
+			p.SelectedModel = cmd.Model
 			p.TickSelectedRole = room.Tick // keep track of WHEN the player selected their role, because if they weren't first, they don't get it!
 		}
 		return

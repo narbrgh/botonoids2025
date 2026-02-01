@@ -30,6 +30,7 @@ export function initLobbyUI(onEvent: (e: LobbyEvent) => void) {
         });
     }
 
+    //listener for "ready" button
     const readyBtn = document.querySelector<HTMLButtonElement>(".ready-btn");
     if (readyBtn) {
         readyBtn.addEventListener("click", () => {

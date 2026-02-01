@@ -4,6 +4,7 @@ type DirType string
 type ModeType string
 type Phase string
 type Role string
+type Model string
 
 const (
 	Up    DirType = "up"
@@ -34,6 +35,13 @@ const (
 	RoleBlackBot  Role = "blackBot"
 	RoleRandomBot Role = "randomBot"
 	RoleObserver  Role = "observer"
+)
+
+const (
+	ModelAlphanoid  Model = "alphanoid"
+	ModelHerbanoid  Model = "herbanoid"
+	ModelBarvinoid  Model = "barvinoid"
+	ModelRandomnoid Model = "randomnoid"
 )
 
 func makeConfig() ConfigMsg {

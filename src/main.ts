@@ -50,7 +50,7 @@ previewCtx.imageSmoothingEnabled = false
 const lobby = document.getElementById("lobby")!;
 initLobbyUI((e) => {
   if (e.type === "ready") {
-        net.sendCommand({ type: 'ready', role: 'randomBot' });
+        net.sendCommand({ type: 'ready', role: lobbyState.role, model: lobbyState.model });
   }
 });
 
@@ -205,7 +205,7 @@ function update(dt: number) {
     case 'phaseLobby': {
       //only allow "ready" on Enter. no other commands
       if (p1.consumeCommands().some(c => c.type === 'actionDown')) {
-        net.sendCommand({ type: 'ready', role: 'randomBot' });
+        net.sendCommand({ type: 'ready', role: lobbyState.role, model: lobbyState.model });
       }
       break;
     } //end if case phaselobby

@@ -8,6 +8,8 @@ import TileMap from './TileMap';
 import Botonoid from './Botonoid';
 import type { PlayerSnapshotMsg, TileMapSnapshotMsg, TileChangeMsg , TileInitiateChangeMsg, TileChangeListMsg} from './protocol'
 import type { Phase , Role } from './protocol';
+import {initLobbyUI, lobbyState } from "./lobby";
+
 
 import { TILE_SIZE, FRAME_SIZE, MOVE_DURATION_MS} from './Constants';
 
@@ -20,7 +22,6 @@ import ServerClock from './ServerClock';
 import './style.css'
 //import type { Command } from './commands';
 
-
 const canvasEl = document.getElementById('game');
 if (!(canvasEl instanceof HTMLCanvasElement)) throw new Error('Canvas #game not found');
 const canvas = canvasEl;
@@ -32,6 +33,11 @@ const ctx = ctxEl;
 ctx.imageSmoothingEnabled = false
 
 const lobby = document.getElementById("lobby")!;
+initLobbyUI((e) => {
+  if (e.type === "ready") {
+    //net.sendCommand({type: "ready", role: e.role, ready: e.ready});
+  }
+});
 
 const cols = Math.floor(canvas.width / TILE_SIZE);
 const rows = Math.floor(canvas.height / TILE_SIZE);

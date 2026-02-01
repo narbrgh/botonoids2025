@@ -211,6 +211,16 @@ button.role-btn {
 }
 
 button.ready-btn {
-  font-size: 20px;
+  font-size: 25px;
+
   padding: 10px 20px;
+  background: #27cd32;
+  color: #111;
+}
+
+button.ready-btn.selected {
+  font-size: 24px;
+  padding: 10px 20px;
+  background: rgba(35, 118, 200, 0.867);
+  box-shadow: 0 0 0 2px #111 inset;
 }

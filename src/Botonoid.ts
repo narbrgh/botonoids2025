@@ -5,7 +5,9 @@ import { MOVE_DURATION_MS, MAX_TILES_COLOR_CHANGE, SERVER_TICK_MS, SERVER_TICK_H
 
 import type { TileActions, ColorChangeResult } from './TileMap';
 
-import type {SnapshotPlayer, DirType, BotonoidMode} from './protocol'
+import type {SnapshotPlayer, DirType, BotonoidMode, Role, Model} from './protocol'
+
+import { frameForBot } from './botonoidSheet';
 
 
 type MoveState = {
@@ -40,6 +42,9 @@ export default class Botonoid {
   private readonly tiles: TileActions;
   private readonly getEstimatedTick: (nowMs: number) => number;
 
+  //these are used to draw the correct Role (color) and Model
+  private role: Role = "goldBot"
+  private model: Model = "alphanoid"
 
   // authoritative move field (for the server to tell the Botonoid to start a "tilewalk")
   private auth = {
@@ -75,7 +80,8 @@ export default class Botonoid {
     if (this.moveState) return;
 
     this.facing = cmd.dir;
-    this.sprite.frame = Botonoid.dirToFrame(this.facing);
+    
+    this.sprite.frame = frameForBot(this.role, this.model, this.facing);
 
     const {dx, dy} = Botonoid.dirToDelta(cmd.dir);
     const nextTileX = this.tilePos.x + dx;
@@ -151,7 +157,9 @@ export default class Botonoid {
     this.cooldownDurTicks = p.cooldownDurTicks;
 
     this.facing = p.facing;
-    this.sprite.frame = Botonoid.dirToFrame(this.facing);
+    this.role = p.role;
+    this.model = p.model;
+    this.sprite.frame = frameForBot(this.role, this.model, this.facing);
 
     //Do not teleport tilePos while moving; tilePos is just a base.
     this.tilePos.set(p.x, p.y)

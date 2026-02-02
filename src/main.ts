@@ -46,7 +46,6 @@ if (!previewCtxEl) throw new Error ('2D context of preview canvas not available'
 const previewCtx = previewCtxEl;
 previewCtx.imageSmoothingEnabled = false
 
-
 const lobby = document.getElementById("lobby")!;
 initLobbyUI((e) => {
   if (e.type === "ready") {
@@ -82,6 +81,16 @@ const net = new NetClient();
 net.connect();
 
 let currentPhase: Phase = 'phaseLobby'
+let prevPhase: Phase = currentPhase;
+
+function handlePhaseChange(next: Phase) {
+  if (prevPhase === 'phaseLobby' && next === 'phaseCountdown') {
+    //update the frames for the botonoid sprite graphics based on role and model
+   //maybe?? 
+  }
+  prevPhase = next;
+  currentPhase = next;
+}
 
 net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
 
@@ -98,7 +107,7 @@ net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
         tileX: p.x,
         tileY: p.y,
         tileSize: TILE_SIZE,
-        sprite: spriteForPlayer(p.id % 2 === 1 ? 'gold' : 'silver'), //TODO when lobby is implemented, allow players to choose their sprite
+        sprite: spriteForPlayer("goldBot","alphanoid"), //TODO when lobby is implemented, allow players to choose their sprite
         tileActions: tileMap,
         getEstimatedTick,
       });
@@ -155,14 +164,14 @@ let lastDir: DirType | null = null;
 new GameLoop(update, render).start();
 
 
-function spriteForPlayer(skin: 'gold' | 'silver'): Sprite {
-  // simplest: odd = gold, even = silver
+function spriteForPlayer(role: Role, model: Model): Sprite {
+  
   return new Sprite({
-    resource: skin === 'gold' ? resources.images.goldBot : resources.images.silverBot,
+    resource: resources.images.bots,
     frameSize: new Vector2(32, 32),
-    hFrames:1,
-    vFrames:4,
-    frame: 2,
+    hFrames:BOT_SHEET.cols,
+    vFrames:BOT_SHEET.rows,
+    frame: frameForBot(role, model, "down"),
     scale: 1,
   });
 }

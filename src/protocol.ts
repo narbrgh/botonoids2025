@@ -44,6 +44,9 @@ export type SnapshotPlayer = {
   numWallsLeft: number;
   cooldownStartTick: number;
   cooldownDurTicks: number;
+
+  role: Role;
+  model: Model;
 };
 
 export type SnapshotTile = {

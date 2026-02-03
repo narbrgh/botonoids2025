@@ -200,6 +200,9 @@ export default class Botonoid {
   }
 
   draw(ctx: CanvasRenderingContext2D, nowMs: number): void {
+  
+    if (this.role === "observer") {return;} // don't draw observers
+
     const p = this.getDrawPx(nowMs);
     this.sprite.drawImage(ctx, p.x, p.y);
 

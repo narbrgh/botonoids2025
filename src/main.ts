@@ -107,7 +107,7 @@ net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
         tileX: p.x,
         tileY: p.y,
         tileSize: TILE_SIZE,
-        sprite: spriteForPlayer("goldBot","alphanoid"), //TODO when lobby is implemented, allow players to choose their sprite
+        sprite: spriteForPlayer("goldBot","alphanoid"), // defaults to goldBot, alphanoid, but later when the server sends the correct role and model, this will be updated
         tileActions: tileMap,
         getEstimatedTick,
       });
@@ -300,6 +300,7 @@ function render() {
       break;
     }
     case 'phaseCountdown': {
+      
       tileMap.draw(ctx, nowMs);
 
       for (const bot of botsById.values()) {

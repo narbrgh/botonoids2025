@@ -142,6 +142,20 @@ func (tm *TileMap) CheckForCombo(x, y int, index uint8) int { //returns combo si
 	return n
 }
 
+func (tm *TileMap) CheckForGarden(x, y int, foundationIndex int, wallIndex int, gardenIndex int, ID int) bool {
+	//this will check left, up, down, and right to see if a garden can be made at each
+	//first reset the "temp" map
+	tm.ResetTempTileMap()
+
+	//now check left
+	leftGarden := tm.GardenFloodFill(x, y, gardenIndex)
+}
+
+func (tm *TileMap) GardenFloodFill(x, y int, gardenIndex int) bool {
+	//to count as a garden, the floodfill algo is not allowed to hit three "side-walls"
+	leftWallHit := false
+}
+
 func (tm *TileMap) ResetTempTileMap() {
 	for y := range tm.tempTileMap {
 		for x := range tm.tempTileMap[y] {

@@ -59,6 +59,12 @@ func CheckForWallBuild(room *Room, p *PlayerState) {
 
 			//Decrement numWallsLeft
 			p.NumWallsLeft = p.NumWallsLeft - 1
+
+			// check for "garden" completion
+			//gardenResult := room.Map.CheckForGarden(p.X, p.Y, p.FoundationIndex, p.WallIndex, p.GardenIndex, p.ID)
+			// TODO add foundation index, wallindex, and garden index
+			gardenResult := room.Map.CheckForGarden(p.X, p.Y, p.FoundationIndex, p.WallIndex, p.GardenIndex, p.ID)
+
 			if p.NumWallsLeft <= 0 {
 
 				//the wallbuilding is done, so first reset the foundation tiles into wall tiles.

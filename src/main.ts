@@ -60,7 +60,7 @@ const tileSprite = new Sprite({
   resource: resources.images.tiles,
   frameSize: new Vector2(FRAME_SIZE, FRAME_SIZE),
   hFrames: 1,
-  vFrames: 11,
+  vFrames: 17,
   frame: 0,
   scale: TILE_SIZE / FRAME_SIZE, // keep this an integer for pixel art
 });

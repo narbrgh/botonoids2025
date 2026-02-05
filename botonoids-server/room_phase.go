@@ -11,7 +11,7 @@ type PhaseConfig struct {
 }
 
 var phaseCfg = PhaseConfig{
-	MinPlayers:        2,
+	MinPlayers:        1,
 	MaxPlayers:        4,
 	CountdownDurTicks: uint64(3 * TickHz),
 	GameDurTicks:      uint64(540 * TickHz),
@@ -41,6 +41,7 @@ func (r *Room) allReady() bool {
 	for _, p := range r.Players {
 		if p.Ready {
 			ready++
+			p.SetSpecialTilesBasedOnRole()
 		}
 		if p.SelectedRole != RoleObserver {
 			activePlayers++

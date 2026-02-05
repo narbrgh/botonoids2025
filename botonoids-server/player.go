@@ -31,6 +31,11 @@ type PlayerState struct { // this is the struct that gets sent through the proto
 	CooldownStartTick   uint64   `json:"cooldownStartTick"`
 	CooldownDurTicks    uint64   `json:"cooldownDurTicks"`
 
+	// tile indices for foundation, wall, and garden for each Role
+	FoundationIndex uint8 `json:"-"`
+	WallIndex       uint8 `json:"-"`
+	GardenIndex     uint8 `json:"-"`
+
 	// variables for Phase and game flow
 	Ready            bool   `json:"ready"`
 	SelectedRole     Role   `json:"role"`
@@ -207,4 +212,26 @@ func (pl *PlayerState) EnterCooldown(currentTick uint64) {
 	pl.Mode = Cooldown
 	pl.CooldownStartTick = currentTick
 	pl.CooldownDurTicks = CooldownTicks
+}
+
+func (pl *PlayerState) SetSpecialTilesBasedOnRole() {
+	switch pl.SelectedRole {
+	case RoleGoldBot:
+		pl.FoundationIndex = 8
+		pl.WallIndex = 9
+		pl.GardenIndex = 10
+	case RoleSilverBot:
+		pl.FoundationIndex = 5
+		pl.WallIndex = 6
+		pl.GardenIndex = 7
+	case RoleWhiteBot:
+		pl.FoundationIndex = 11
+		pl.WallIndex = 12
+		pl.GardenIndex = 13
+	case RoleBlackBot:
+		pl.FoundationIndex = 14
+		pl.WallIndex = 15
+		pl.GardenIndex = 16
+	}
+
 }

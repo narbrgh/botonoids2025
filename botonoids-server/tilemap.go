@@ -269,6 +269,7 @@ func (tm *TileMap) CheckForGarden(x, y int, foundationIndex uint8, wallIndex uin
 	numFoundationsDestroyed := 0
 
 	if madeGarden {
+
 		for yC := range tm.tempTileMap {
 			for xC := range tm.tempTileMap[yC] {
 				if tm.gardenTileMap[yC][xC] == true {
@@ -276,6 +277,7 @@ func (tm *TileMap) CheckForGarden(x, y int, foundationIndex uint8, wallIndex uin
 						numFoundationsDestroyed++
 					}
 					tm.Tiles[yC][xC].Index = gardenIndex
+					tm.AddChange(xC, yC, gardenIndex)
 				}
 			}
 		}

@@ -52,8 +52,8 @@ func broadcast(room *Room, msg []byte) {
 
 func CheckForWallBuild(room *Room, p *PlayerState) {
 	if p.ActionPressed == true {
-		//result := room.Map.TryToBuildWall(p.X, p.Y, p.FoundationIndex, p.WallIndex, p.ID) //TODO use foundation index and wallindex
-		result := room.Map.TryToBuildWall(p.X, p.Y, 5, 6, p.ID)
+		result := room.Map.TryToBuildWall(p.X, p.Y, p.FoundationIndex, p.WallIndex, p.ID) //TODO use foundation index and wallindex
+		//result := room.Map.TryToBuildWall(p.X, p.Y, 5, 6, p.ID)
 
 		if result == true { //wall was built
 
@@ -62,9 +62,7 @@ func CheckForWallBuild(room *Room, p *PlayerState) {
 
 			// check for "garden" completion
 			// TODO add foundation index, wallindex, and garden index
-			//gardenResult, numFoundationsDestroyed := room.Map.CheckForGarden(p.X, p.Y, p.FoundationIndex, p.WallIndex, p.GardenIndex, p.ID)
-
-			gardenResult, numFoundationsDestroyed := room.Map.CheckForGarden(p.X, p.Y, 5, 6, 7, p.ID)
+			gardenResult, numFoundationsDestroyed := room.Map.CheckForGarden(p.X, p.Y, p.FoundationIndex, p.WallIndex, p.GardenIndex, p.ID)
 			if gardenResult == true {
 				numFoundationsDestroyed++
 			}
@@ -74,7 +72,7 @@ func CheckForWallBuild(room *Room, p *PlayerState) {
 				//the wallbuilding is done, so first reset the foundation tiles into wall tiles.
 
 				//TODO reset foundation tiles
-				room.Map.ResetFoundationTiles(5) // TODO add foundationindex
+				room.Map.ResetFoundationTiles(p.FoundationIndex)
 
 				// Now account for the special case: if there are still some tileChangesLeft, enter color changing mode.
 				// else, enter cooldown
@@ -145,8 +143,9 @@ func runGameLoop(room *Room) {
 						Mode:                Walking,
 						NumColorChangesLeft: 0,
 						NumWallsLeft:        0,
-						//FoundationIndex:     5,
-						//WallIndex:           6,
+						FoundationIndex:     5,
+						WallIndex:           6,
+						GardenIndex:         7,
 					}
 				}
 			case u := <-unregCh:
@@ -215,8 +214,8 @@ func runGameLoop(room *Room) {
 								//InitiateCombo makes the tilemap into foundations
 								//TODO here I need to pass in the index of the foundation based on the p.ID. Currently hardcoded, need to make this protocolized somehow
 
-								//room.Map.InitiateCombo(p.FoundationIndex)
-								room.Map.InitiateCombo(5)
+								room.Map.InitiateCombo(p.FoundationIndex)
+								//room.Map.InitiateCombo(5)
 
 								// change mode to wallbuilding
 								p.Mode = WallBuilding

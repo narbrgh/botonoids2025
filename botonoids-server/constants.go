@@ -12,7 +12,7 @@ const (
 	WorldCols          = 30 // temporary bounds for now (TODO update this later)
 	WorldRows          = 16
 	SpawnBaseX         = 6
-	SpawnBaseY         = 6
+	SpawnBaseY         = 3
 	SpawnCols          = 12
 	NewSeed            = 10 //TODO make random seed
 	NumColors          = 5

@@ -61,9 +61,13 @@ func CheckForWallBuild(room *Room, p *PlayerState) {
 			p.NumWallsLeft = p.NumWallsLeft - 1
 
 			// check for "garden" completion
-			//gardenResult := room.Map.CheckForGarden(p.X, p.Y, p.FoundationIndex, p.WallIndex, p.GardenIndex, p.ID)
 			// TODO add foundation index, wallindex, and garden index
-			gardenResult := room.Map.CheckForGarden(p.X, p.Y, p.FoundationIndex, p.WallIndex, p.GardenIndex, p.ID)
+			//gardenResult, numFoundationsDestroyed := room.Map.CheckForGarden(p.X, p.Y, p.FoundationIndex, p.WallIndex, p.GardenIndex, p.ID)
+
+			gardenResult, numFoundationsDestroyed := room.Map.CheckForGarden(p.X, p.Y, 5, 6, 7, p.ID)
+			if gardenResult == true {
+				numFoundationsDestroyed++
+			}
 
 			if p.NumWallsLeft <= 0 {
 

@@ -18,6 +18,22 @@ type TileMap struct {
 	tempTileMap [][]bool    `json:"-"` // tempTileMap is used to check for combos and walls, then implement them without running the flood fill algo twice
 	pending     []TileDelta `json:"-"`
 	rng         *rand.Rand  `json:"-"`
+
+	//variables for checking for garden
+	leftEdgeHit   bool `json:"-"`
+	rightEdgeHit  bool `json:"-"`
+	topEdgeHit    bool `json:"-"`
+	bottomEdgeHit bool `json:"-"`
+	enemyWallHit  bool `json:"-"`
+
+	// TempTileMap  shows true / false for what what "checked"
+
+	// RegionTileMap makes it so only the "region" (continuous area) that met criteria to become a garden actually
+	// becomes a garden
+	regionTileMap [][]bool `json:"-"`
+
+	// gardenTileMap are the actual tiles that become garden
+	gardenTileMap [][]bool `json:"-"`
 }
 
 type TileDelta struct { //TileDelta is used for the multiple-tile-change-broadcast (such as combos and walls)
@@ -38,18 +54,26 @@ func NewTileMap(cols, rows int, seed int64) *TileMap {
 	rng := rand.New(rand.NewSource(seed))
 	t := make([][]Tile, rows)
 	temp := make([][]bool, rows)
+	garden := make([][]bool, rows)
+	region := make([][]bool, rows)
 	for y := 0; y < rows; y++ {
 		t[y] = make([]Tile, cols)
 		temp[y] = make([]bool, cols)
+		garden[y] = make([]bool, cols)
+		region[y] = make([]bool, cols)
 		for x := 0; x < cols; x++ {
 			t[y][x].Index = uint8(rng.Intn(NumColors))
 			t[y][x].Changing = false
 			t[y][x].TileChangeStartTick = 0
 			t[y][x].TileChangeDurTicks = 0
 			temp[y][x] = false
+			garden[y][x] = false
+			region[y][x] = false
+
+			//variables for checking for garden
 		}
 	}
-	return &TileMap{Cols: cols, Rows: rows, Tiles: t, tempTileMap: temp, rng: rng}
+	return &TileMap{Cols: cols, Rows: rows, Tiles: t, tempTileMap: temp, gardenTileMap: garden, regionTileMap: region, rng: rng}
 }
 
 func (tm *TileMap) SetTile(x, y int, index uint8) bool {
@@ -94,6 +118,15 @@ func IsTileAFoundationWallOrFlower(i uint8) bool {
 		return true
 	}
 	return false
+}
+
+func IsTileAWall(i uint8) bool {
+	return i == 6 || i == 9 || i == 12 || i == 15
+}
+
+func isTileGardenable(i uint8) bool {
+	//if it's a color tile (0 through 4) or is a foundation (hardcoded here) then it's gardenable.
+	return (i < NumColors || i == 5 || i == 8 || i == 11 || i == 14)
 }
 
 func CheckColorChangeResult(x, y int, tm *TileMap) ColorChangeResult {
@@ -142,24 +175,206 @@ func (tm *TileMap) CheckForCombo(x, y int, index uint8) int { //returns combo si
 	return n
 }
 
-func (tm *TileMap) CheckForGarden(x, y int, foundationIndex int, wallIndex int, gardenIndex int, ID int) bool {
-	//this will check left, up, down, and right to see if a garden can be made at each
-	//first reset the "temp" map
-	tm.ResetTempTileMap()
-
-	//now check left
-	leftGarden := tm.GardenFloodFill(x, y, gardenIndex)
+func (tm *TileMap) ResetEdges() {
+	tm.leftEdgeHit = false
+	tm.rightEdgeHit = false
+	tm.bottomEdgeHit = false
+	tm.topEdgeHit = false
+	tm.enemyWallHit = false
 }
 
-func (tm *TileMap) GardenFloodFill(x, y int, gardenIndex int) bool {
-	//to count as a garden, the floodfill algo is not allowed to hit three "side-walls"
-	leftWallHit := false
+func (tm *TileMap) CountEdgesHit() int {
+	c := 0
+
+	if tm.bottomEdgeHit {
+		c++
+	}
+	if tm.leftEdgeHit {
+		c++
+	}
+	if tm.rightEdgeHit {
+		c++
+	}
+	if tm.topEdgeHit {
+		c++
+	}
+
+	return c
+}
+
+func (tm *TileMap) CheckForGarden(x, y int, foundationIndex uint8, wallIndex uint8, gardenIndex uint8, ID int) (bool, int) { // returns true if garden; returns number of foundation tiles destroyed as the int
+	//this will check left, up, down, and right to see if a garden can be made at each
+	//first reset the "temp" map
+	tm.ResetTempRegionAndGardenTileMap()
+
+	tm.tempTileMap[y][x] = true
+
+	madeGarden := false
+	n := 0
+
+	// check left
+	tm.ResetEdges()
+	tm.ResetRegionTileMap()
+
+	if x > 0 && tm.tempTileMap[y][x-1] == false && isTileGardenable(tm.Tiles[y][x-1].Index) {
+		tm.GardenFloodFill(x-1, y, wallIndex)
+		n = tm.CountEdgesHit()
+		if !tm.enemyWallHit && n <= 2 {
+			//garden!
+			madeGarden = true
+			tm.MergeRegionToGardenTileMap()
+		}
+	}
+
+	//check right
+	tm.ResetEdges()
+	tm.ResetRegionTileMap()
+	if x < tm.Cols-1 && tm.tempTileMap[y][x+1] == false && isTileGardenable(tm.Tiles[y][x+1].Index) {
+		tm.GardenFloodFill(x+1, y, wallIndex)
+		n = tm.CountEdgesHit()
+		if !tm.enemyWallHit && n <= 2 {
+			//garden!
+			madeGarden = true
+			tm.MergeRegionToGardenTileMap()
+		}
+	}
+
+	//check up
+	tm.ResetEdges()
+	tm.ResetRegionTileMap()
+	if y > 0 && tm.tempTileMap[y-1][x] == false && isTileGardenable(tm.Tiles[y-1][x].Index) {
+
+		tm.GardenFloodFill(x, y-1, wallIndex)
+		n = tm.CountEdgesHit()
+		if !tm.enemyWallHit && n <= 2 {
+			//garden!
+			madeGarden = true
+			tm.MergeRegionToGardenTileMap()
+		}
+	}
+
+	//check down
+	tm.ResetEdges()
+	tm.ResetRegionTileMap()
+	if y < tm.Rows-1 && tm.tempTileMap[y+1][x] == false && isTileGardenable(tm.Tiles[y+1][x].Index) {
+		tm.GardenFloodFill(x, y+1, wallIndex)
+		n = tm.CountEdgesHit()
+		if !tm.enemyWallHit && n <= 2 {
+			//garden!
+			madeGarden = true
+			tm.MergeRegionToGardenTileMap()
+		}
+	}
+
+	numFoundationsDestroyed := 0
+
+	if madeGarden {
+		for yC := range tm.tempTileMap {
+			for xC := range tm.tempTileMap[yC] {
+				if tm.gardenTileMap[yC][xC] == true {
+					if tm.Tiles[yC][xC].Index == foundationIndex {
+						numFoundationsDestroyed++
+					}
+					tm.Tiles[yC][xC].Index = gardenIndex
+				}
+			}
+		}
+	}
+
+	return madeGarden, numFoundationsDestroyed
+}
+
+func (tm *TileMap) GardenFloodFill(x, y int, wallIndex uint8) {
+
+	// if the floodfill hits 2 "edges"", it's a garden. if it hits 3 edges, or hits an opponent wall, it's not.
+	if tm.InBounds(x, y) == false {
+		if x < 0 {
+			tm.leftEdgeHit = true
+			return
+		}
+		if x > tm.Cols-1 {
+			tm.rightEdgeHit = true
+			return
+		}
+		if y < 0 {
+			tm.topEdgeHit = true
+			return
+		}
+		if y > tm.Rows-1 {
+			tm.bottomEdgeHit = true
+			return
+		}
+	}
+
+	//already checked this square
+	if tm.tempTileMap[y][x] == true {
+		return
+	}
+
+	//now set this square that is has been checked
+	tm.tempTileMap[y][x] = true
+	tm.regionTileMap[y][x] = true
+
+	i, ok := tm.GetTileIndex(x, y) //check for walls, friendly or not
+	if ok {
+		if IsTileAWall(i) {
+			if i == wallIndex {
+				return
+			}
+			//if it's a wall, but not a "friendly wall" (as passed by wallIndex), then the garden is a failure
+			tm.enemyWallHit = true
+			return
+		}
+	}
+
+	//now flood out 4-ways
+	tm.GardenFloodFill(x-1, y, wallIndex)
+	tm.GardenFloodFill(x+1, y, wallIndex)
+	tm.GardenFloodFill(x, y-1, wallIndex)
+	tm.GardenFloodFill(x, y+1, wallIndex)
+
+}
+
+func (tm *TileMap) MergeRegionToGardenTileMap() {
+	for y := range tm.regionTileMap {
+		for x := range tm.regionTileMap[y] {
+			if tm.regionTileMap[y][x] && isTileGardenable(tm.Tiles[y][x].Index) {
+				tm.gardenTileMap[y][x] = true
+			}
+		}
+	}
 }
 
 func (tm *TileMap) ResetTempTileMap() {
 	for y := range tm.tempTileMap {
 		for x := range tm.tempTileMap[y] {
 			tm.tempTileMap[y][x] = false
+		}
+	}
+}
+
+func (tm *TileMap) ResetTempRegionAndGardenTileMap() {
+	for y := range tm.tempTileMap {
+		for x := range tm.tempTileMap[y] {
+			tm.tempTileMap[y][x] = false
+			tm.gardenTileMap[y][x] = false
+			tm.regionTileMap[y][x] = false
+		}
+	}
+}
+
+func (tm *TileMap) ResetGardenTileMap() {
+	for y := range tm.tempTileMap {
+		for x := range tm.tempTileMap[y] {
+			tm.gardenTileMap[y][x] = false
+		}
+	}
+}
+
+func (tm *TileMap) ResetRegionTileMap() {
+	for y := range tm.regionTileMap {
+		for x := range tm.regionTileMap[y] {
+			tm.regionTileMap[y][x] = false
 		}
 	}
 }

@@ -1,7 +1,7 @@
 import Vector2 from './Vector2';
 import { Sprite } from './Sprite';
 import type { Command } from './commands';
-import { MOVE_DURATION_MS, MAX_TILES_COLOR_CHANGE, SERVER_TICK_MS, SERVER_TICK_HZ } from './Constants';
+import { MOVE_DURATION_MS, MAX_TILES_COLOR_CHANGE, SERVER_TICK_MS, SERVER_TICK_HZ, X_DRAW_OFFSET, Y_DRAW_OFFSET } from './Constants';
 
 import type { TileActions, ColorChangeResult } from './TileMap';
 
@@ -194,8 +194,8 @@ export default class Botonoid {
       ctx.textBaseline = 'bottom';
       ctx.strokeStyle = '#000'
       ctx.lineWidth = 3;
-      ctx.strokeText(String(n), x, y); //TODO account for offset
-      ctx.fillText(String(n), x, y); // TODO account for offset
+      ctx.strokeText(String(n), x, y);
+      ctx.fillText(String(n), x, y);
       ctx.restore();
   }
 
@@ -233,15 +233,15 @@ export default class Botonoid {
 
   private getDrawPx(nowMs: number): Vector2 {
     if (!this.auth.moving) {
-        return new Vector2(this.auth.x*this.tileSize, this.auth.y*this.tileSize); //TODO add grid offset
+        return new Vector2(this.auth.x*this.tileSize+X_DRAW_OFFSET, this.auth.y*this.tileSize+Y_DRAW_OFFSET); //TODO add grid offset
     }
 
     const estTick = this.getEstimatedTick(nowMs);
     const t = (estTick - this.auth.moveStartTick) / this.auth.moveDurTicks; // t is a number from 0 to 1 on how far into tile walk we are
     const tt = Math.max(0, Math.min(1, t)); //tt is 1 but capped between 0 and 1 (inclusive)
     
-    const x = (this.auth.fromX + (this.auth.toX - this.auth.fromX) * tt) * this.tileSize; // TODO add grid offset
-    const y = (this.auth.fromY + (this.auth.toY - this.auth.fromY) * tt) * this.tileSize; // TODO add grid offset
+    const x = ((this.auth.fromX + (this.auth.toX - this.auth.fromX) * tt) * this.tileSize)+X_DRAW_OFFSET; 
+    const y = ((this.auth.fromY + (this.auth.toY - this.auth.fromY) * tt) * this.tileSize)+Y_DRAW_OFFSET; 
     
     return new Vector2(x, y);
         

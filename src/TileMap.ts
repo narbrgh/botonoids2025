@@ -1,5 +1,5 @@
 import {Sprite} from './Sprite';
-import { NUMBER_OF_COLORS} from './Constants';
+import { NUMBER_OF_COLORS, X_DRAW_OFFSET, Y_DRAW_OFFSET} from './Constants';
 import Vector2 from './Vector2';
 import { mulberry32 } from './rng';
 import type { SnapshotTileMap, SnapshotTile, TileChangeListMsg } from './protocol';
@@ -187,8 +187,8 @@ export default class TileMap {
         for (let r = 0; r < this.rows; r++) {
             for (let c = 0; c < this.cols; c++) {
                 const index = this.tiles[r][c].index; 
-                const x = c * this.tileSize;
-                const y = r * this.tileSize;
+                const x = c * this.tileSize + X_DRAW_OFFSET;
+                const y = r * this.tileSize + Y_DRAW_OFFSET;
 
                 this.tileSprite.frame = index;
                 this.tileSprite.drawImage(ctx,x,y);

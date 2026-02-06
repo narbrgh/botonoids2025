@@ -149,10 +149,11 @@ func decodeInputCmd(raw json.RawMessage) (InputCmd, error) {
 }
 
 type PlayerSnapshotMsg struct {
-	Type    string         `json:"type"` // "playerSnapshot"
-	Tick    uint64         `json:"tick"`
-	Phase   Phase          `json:"phase"`
-	Players []*PlayerState `json:"players"`
+	Type            string         `json:"type"` // "playerSnapshot"
+	Tick            uint64         `json:"tick"`
+	Phase           Phase          `json:"phase"`
+	PhaseEndsAtTick uint64         `json:"phaseEndsAtTick"`
+	Players         []*PlayerState `json:"players"`
 }
 
 type TileMapSnapshotMsg struct {
@@ -190,7 +191,7 @@ func encodePlayerSnapshot(room *Room) ([]byte, error) {
 		players = append(players, p)
 	}
 
-	msg := PlayerSnapshotMsg{Type: "playerSnapshot", Tick: room.Tick, Phase: room.Phase, Players: players}
+	msg := PlayerSnapshotMsg{Type: "playerSnapshot", Tick: room.Tick, Phase: room.Phase, PhaseEndsAtTick: room.PhaseEndsAtTick, Players: players}
 	return json.Marshal(msg)
 }
 

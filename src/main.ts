@@ -53,8 +53,15 @@ initLobbyUI((e) => {
   }
 });
 
-const cols = Math.floor(canvas.width / TILE_SIZE);
-const rows = Math.floor(canvas.height / TILE_SIZE);
+//const cols = Math.floor(canvas.width / TILE_SIZE);
+//const rows = Math.floor(canvas.height / TILE_SIZE);
+
+//rather than cols and rows being calculated in the client, they will now default
+// to 0 then later be updated by the server -> client message
+let cols = 0;
+let rows = 0;
+let tileSize = TILE_SIZE;
+let tileMap: TileMap | null = null;
 
 const tileSprite = new Sprite({
   resource: resources.images.tiles,
@@ -66,9 +73,10 @@ const tileSprite = new Sprite({
 });
 
 const clock = new ServerClock();
+let secondsLeft = 540;
 
 const getEstimatedTick = clock.estimatedTick.bind(clock);
-const tileMap = new TileMap({cols, rows, tileSize: TILE_SIZE, tileSprite, getEstimatedTick });
+//const tileMap = new TileMap({cols, rows, tileSize: TILE_SIZE, tileSprite, getEstimatedTick });
 
 // ------ Controllers ------
 const p1 = new KeyboardController(P2_KEYS); // TODO make it make sense. currently lazily using P2_KEYS because those are arrow keys, instead of changing the file
@@ -97,11 +105,17 @@ net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
   currentPhase = s.phase;
   const receivedAtMs = performance.now()
   const seen = new Set<number>();
+  const ticksLeft = Math.max(0, s.phaseEndsAtTick - s.tick);
+  secondsLeft = Math.ceil(clock.ticksToSeconds(ticksLeft));
+
 
   for (const p of s.players) {
     seen.add(p.id);
 
     let bot = botsById.get(p.id);
+
+    if (!tileMap) return;
+
     if (!bot) {
       bot = new Botonoid({
         tileX: p.x,
@@ -132,25 +146,30 @@ net.onTileMapSnapshot = (s: TileMapSnapshotMsg) => {
   const receivedAtMs = performance.now()
 
   clock.updateSnapshot(s.tick, receivedAtMs);
-  tileMap.setAuthoritativeStateFromTileMapSnapshot(s.tileMap);
+  if (tileMap) {tileMap.setAuthoritativeStateFromTileMapSnapshot(s.tileMap);}
 
 };
 
 net.onTileChange = (m: TileChangeMsg) => {
-  tileMap.setTileIndex(new Vector2(m.x, m.y), m.index);
+  if (tileMap) {tileMap.setTileIndex(new Vector2(m.x, m.y), m.index);}
 }
 
 net.onTileInitiateChange = (m: TileInitiateChangeMsg) => {
-  tileMap.setAuthoritativeInitiateColorChange(new Vector2(m.x, m.y), m.toIndex, m.tileChangeStartTick, m.tileChangeDurTicks);
+  if (tileMap) {tileMap.setAuthoritativeInitiateColorChange(new Vector2(m.x, m.y), m.toIndex, m.tileChangeStartTick, m.tileChangeDurTicks);}
 }
 
 net.onTileChangeList = (m: TileChangeListMsg) => {
-  tileMap.setAuthoritativeTileChangeList(m)
+  if (tileMap) {tileMap.setAuthoritativeTileChangeList(m)}
 }
 
 net.onConfig = (c) => {
   console.log('server config', c); 
+  cols = c.cols;
+  rows = c.rows;
+
+  tileMap = new TileMap({ cols, rows, tileSize, tileSprite, getEstimatedTick });
   tileMap.rerollWithSeed(c.seed);
+
   clock.updateConfig(c.tickHz);
 }
 
@@ -191,7 +210,9 @@ function drivePlayer(controller: KeyboardController, player: Botonoid, dt: numbe
   // buttons (action/changeItem/useItem) — Botonoid ignores for now, but you’ll later route these
   for (const cmd of controller.consumeCommands()) {
     net.sendCommand(cmd);
-    player.applyCommand(cmd, cols, rows);// optional local behavior for now
+    if (cols > 0 && rows > 0) {
+      player.applyCommand(cmd, cols, rows);// optional local behavior for now
+    }
   }
 
   // movement intent: only start a move when idle
@@ -200,7 +221,9 @@ function drivePlayer(controller: KeyboardController, player: Botonoid, dt: numbe
     if (dir) {
       const cmd = { type: 'move', dir } as const;
       net.sendCommand(cmd);
-      player.applyCommand({ type: 'move', dir }, cols, rows); // optional local behavior for now
+      if (cols > 0 && rows > 0) {
+        player.applyCommand({ type: 'move', dir }, cols, rows); // optional local behavior for now
+      }
     }
   }
 
@@ -226,7 +249,7 @@ function update(dt: number) {
         lastDir = dir;
       }
       //TODO call player update here, if needed. (If we make the player's botonoid start to show actions before the server tells it that it happened)
-      tileMap.update(nowMs)
+      if (tileMap) {tileMap.update(nowMs)}
 
       break;
     } //end if case phaseplaying
@@ -301,7 +324,7 @@ function render() {
     }
     case 'phaseCountdown': {
       
-      tileMap.draw(ctx, nowMs);
+      if (tileMap) {tileMap.draw(ctx, nowMs);}
 
       for (const bot of botsById.values()) {
         bot.draw(ctx, nowMs);
@@ -317,11 +340,16 @@ function render() {
     }
     
     case 'phasePlaying': {
-      tileMap.draw(ctx, nowMs);
+      if (tileMap) {tileMap.draw(ctx, nowMs);}
 
       for (const bot of botsById.values()) {
         bot.draw(ctx, nowMs);
       }
+
+      // draw HUD
+      //***
+      drawText(ctx, String(secondsLeft), 100, 100);
+
       break;
     }
   }

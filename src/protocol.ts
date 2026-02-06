@@ -72,6 +72,7 @@ export type PlayerSnapshotMsg = {
   type: 'playerSnapshot'; // formerly just said 'snapshot'
   tick: number;
   phase: Phase;
+  phaseEndsAtTick: number;
   players: SnapshotPlayer[];
 };
 

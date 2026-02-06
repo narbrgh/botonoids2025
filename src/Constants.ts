@@ -10,8 +10,8 @@ export const NUMBER_OF_COLORS = 5; // red, orange, green, blue, purplse
 export const TILE_SIZE = 32;
 export const FRAME_SIZE = 32;
 
-export const NUM_COLS = 30; //TODO make code use this
-export const NUM_ROWS = 17; //TODO make code use this
+export const X_DRAW_OFFSET = 16;
+export const Y_DRAW_OFFSET = 16;
 
 export const SERVER_TICK_HZ = 20; // TODO make this be "imported" from the authoritative server
 export const SERVER_TICK_MS = 1000 / SERVER_TICK_HZ;

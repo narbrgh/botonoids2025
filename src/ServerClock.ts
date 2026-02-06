@@ -16,4 +16,8 @@ export default class ServerClock {
         const dt = nowMs - this.lastAtMs;
         return this.lastTick + dt / this.tickMs;
     }
+
+    ticksToSeconds(ticks: number): number {
+        return ticks * this.tickMs / 1000;
+    }
 }

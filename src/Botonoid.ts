@@ -5,7 +5,7 @@ import { MOVE_DURATION_MS, MAX_TILES_COLOR_CHANGE, SERVER_TICK_MS, SERVER_TICK_H
 
 import type { TileActions, ColorChangeResult } from './TileMap';
 
-import type {SnapshotPlayer, DirType, BotonoidMode, Role, Model} from './protocol'
+import type {SnapshotPlayer, DirType, BotonoidMode, Role, Model, ItemType} from './protocol'
 
 import { frameForBot } from './botonoidSheet';
 
@@ -46,6 +46,11 @@ export default class Botonoid {
   private role: Role = "goldBot"
   private model: Model = "alphanoid"
 
+  private score: number = 0
+  private selectedItem: ItemType = "itemSillyPad"
+  private numWallbreakersLeft = 0
+  private numSillyPadsLeft = 0
+  
   // authoritative move field (for the server to tell the Botonoid to start a "tilewalk")
   private auth = {
     x: 0,
@@ -155,6 +160,11 @@ export default class Botonoid {
     this.numWallsLeft = p.numWallsLeft;
     this.cooldownStartTick = p.cooldownStartTick;
     this.cooldownDurTicks = p.cooldownDurTicks;
+
+    this.score = p.score
+    this.selectedItem = p.selectedItem
+    this.numWallbreakersLeft = p.numWallbreakersLeft
+    this.numSillyPadsLeft = p.numSillyPadsLeft
 
     this.facing = p.facing;
     this.role = p.role;

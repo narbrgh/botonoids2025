@@ -11,6 +11,8 @@ export type RoleInvalidMsg = { type: 'roleInvalid'; playerId: number; msg?: stri
 export const roles = ["goldBot", "silverBot", "whiteBot", "blackBot", "randomBot", "observer"] as const;
 export type Role = typeof roles[number];
 
+export type ItemType = "itemSillyPad" | "itemWallbreaker" | "itemGhost"
+
 export const models = ["alphanoid","herbanoid","barvinoid","randomnoid"] as const;
 export type Model = typeof models[number];
 
@@ -44,6 +46,11 @@ export type SnapshotPlayer = {
   numWallsLeft: number;
   cooldownStartTick: number;
   cooldownDurTicks: number;
+
+  score: number;
+  selectedItem: ItemType;
+  numWallbreakersLeft: number;
+  numSillyPadsLeft: number;
 
   role: Role;
   model: Model;

@@ -31,6 +31,12 @@ type PlayerState struct { // this is the struct that gets sent through the proto
 	CooldownStartTick   uint64   `json:"cooldownStartTick"`
 	CooldownDurTicks    uint64   `json:"cooldownDurTicks"`
 
+	// variables for logic on items and score
+	Score               int      `json:"score"`
+	SelectedItem        ItemType `json:"selectedItem"`
+	NumWallbreakersLeft int      `json:"numWallbreakersLeft"`
+	NumSillyPadsLeft    int      `json:"numSillyPadsLeft"`
+
 	// tile indices for foundation, wall, and garden for each Role
 	FoundationIndex uint8 `json:"-"`
 	WallIndex       uint8 `json:"-"`

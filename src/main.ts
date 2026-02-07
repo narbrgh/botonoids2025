@@ -10,9 +10,11 @@ import type { PlayerSnapshotMsg, TileMapSnapshotMsg, TileChangeMsg , TileInitiat
 import type { Phase , Role , Model } from './protocol';
 import {initLobbyUI, lobbyState } from "./lobby";
 
+import HUD from "./hud";
+
 import {frameForBot, BOT_SHEET} from './botonoidSheet'
 
-import { TILE_SIZE, FRAME_SIZE, MOVE_DURATION_MS} from './Constants';
+import { TILE_SIZE, FRAME_SIZE, MOVE_DURATION_MS, Y_DRAW_OFFSET} from './Constants';
 
 import type { DirType, InputCmd } from './protocol';
 
@@ -34,6 +36,9 @@ if (!ctxEl) throw new Error('2D context not available');
 const ctx = ctxEl;
 
 ctx.imageSmoothingEnabled = false
+
+//Set up HUD
+let hud = new HUD(ctx);
 
 
 //Set up small canvas element that draws the botonoid preview in the lobby screen
@@ -257,6 +262,8 @@ function update(dt: number) {
   
 }
 
+
+
 function render() {
   const nowMs = performance.now();
 
@@ -349,7 +356,10 @@ function render() {
       // draw HUD
       //***
       drawText(ctx, String(secondsLeft), 100, 100);
+      const hudY = Y_DRAW_OFFSET + tileSize * rows
 
+      hud.draw({x: 0, y: hudY, width: canvas.width, height: canvas.height - hudY, timeLeft: secondsLeft, botsById, localPlayerId: net.playerId});
+    
       break;
     }
   }

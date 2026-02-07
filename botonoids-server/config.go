@@ -5,6 +5,7 @@ type ModeType string
 type Phase string
 type Role string
 type Model string
+type ItemType string
 
 const (
 	Up    DirType = "up"
@@ -42,6 +43,12 @@ const (
 	ModelHerbanoid  Model = "herbanoid"
 	ModelBarvinoid  Model = "barvinoid"
 	ModelRandomnoid Model = "randomnoid"
+)
+
+const (
+	ItemSillyPad    ItemType = "itemSillyPad"
+	ItemWallbreaker ItemType = "itemWallbreaker"
+	ItemGhost       ItemType = "itemGhost"
 )
 
 func makeConfig() ConfigMsg {

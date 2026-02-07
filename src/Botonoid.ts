@@ -46,6 +46,8 @@ export default class Botonoid {
   private role: Role = "goldBot"
   private model: Model = "alphanoid"
 
+  private id: number = 0
+
   private score: number = 0
   private selectedItem: ItemType = "itemSillyPad"
   private numWallbreakersLeft = 0
@@ -161,6 +163,8 @@ export default class Botonoid {
     this.cooldownStartTick = p.cooldownStartTick;
     this.cooldownDurTicks = p.cooldownDurTicks;
 
+    this.id = p.id
+
     this.score = p.score
     this.selectedItem = p.selectedItem
     this.numWallbreakersLeft = p.numWallbreakersLeft
@@ -269,6 +273,19 @@ export default class Botonoid {
   //mode Getter
   getMode(): BotonoidMode {
     return this.mode;
+  }
+
+  //role Getter
+  getRole(): Role {
+    return this.role;
+  }
+
+  getId(): number {
+    return this.id
+  }
+
+  getSelectedItem():ItemType {
+    return this.selectedItem;
   }
 
   private handleAction(): void {

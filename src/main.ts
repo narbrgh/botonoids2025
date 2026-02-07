@@ -67,6 +67,7 @@ let cols = 0;
 let rows = 0;
 let tileSize = TILE_SIZE;
 let tileMap: TileMap | null = null;
+let numActivePlayers = 0;
 
 const tileSprite = new Sprite({
   resource: resources.images.tiles,
@@ -132,6 +133,8 @@ net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
       });
       botsById.set(p.id, bot);
     }
+    
+    numActivePlayers = [...botsById.values()].filter(b => b.getRole() !== "observer").length;
 
     bot.setAuthoritativeStateFromPlayerSnapshot(p);
     
@@ -358,7 +361,7 @@ function render() {
       drawText(ctx, String(secondsLeft), 100, 100);
       const hudY = Y_DRAW_OFFSET + tileSize * rows
 
-      hud.draw({x: 0, y: hudY, width: canvas.width, height: canvas.height - hudY, timeLeft: secondsLeft, botsById, localPlayerId: net.playerId});
+      hud.draw({x: 0, y: hudY, width: canvas.width, height: canvas.height - hudY, timeLeft: secondsLeft, botsById, localPlayerId: net.playerId, numActivePlayers});
     
       break;
     }

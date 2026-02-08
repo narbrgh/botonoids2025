@@ -6,7 +6,7 @@ import { resources } from "./Resources";
 import Vector2 from "./Vector2"
 import type { Role , ItemType } from "./protocol"
 
-const PLAYER_CARD_WIDTH = 80
+const PLAYER_CARD_WIDTH = 100
 const PLAYER_CARD_HEIGHT = 34
 const PLAYER_CARD_SPACING = 40
 
@@ -64,7 +64,7 @@ export default class HUD {
         this.ctx.fillStyle = '#fff';
         this.ctx.font = '16px monospace';
         this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(`${timeLeft}`, x+ width / 2, y + height / 2);
+        this.ctx.fillText(`${timeLeft}`, x+ width - 50, y + height / 2);
         
     }
 
@@ -72,9 +72,6 @@ export default class HUD {
         const totalPlayerCardDrawWidth = (n * PLAYER_CARD_WIDTH) + ((n-1) * PLAYER_CARD_SPACING)
         let currentX: number = x+  width / 2 - totalPlayerCardDrawWidth / 2
         let drawY: number = y + height / 2 - PLAYER_CARD_HEIGHT / 2
-
-        this.ctx.fillStyle = "rgba(255,255,255,0.4)"
-        this.ctx.fillRect(currentX, drawY, PLAYER_CARD_WIDTH, PLAYER_CARD_HEIGHT)
 
         const bots = [...botsById.values()].sort((a, b) => a.getId() - b.getId());
         for (const bot of bots) { 
@@ -89,35 +86,88 @@ export default class HUD {
     // and is drawn for all the "other" players in player mode
     private drawPlayerInfoCardSmall(x: number, y: number, width: number, height: number, bot: Botonoid) {
         
-        this.ctx.fillStyle = "rgba(255,255,255,0.4)"
-        this.ctx.fillRect(x, y, width, height)
+        //first some calculations. if there is a box like this:
+        // ---------------------
+        // |                   |
+        // ---------------------
+        // and there are three squares that have to fit evenly inside, we need to figure out the
+        // "white space" between the boxes, and also apply that to the left and right edge so the  
+        // squares don't touch the left and right edges. 
+        // So: occupiedWidth = squarewidth * 3
+        // unoccupiedWidth = boxWidth - occupiedWidth
+        // each individual "white space" is unoccupiedWidth / 4
+
+        const occupiedWidth: number = this.itemsSprite.frameSize.x * 3;
+        const unoccupiedWidth: number = width - occupiedWidth;
+        const whiteSpace = unoccupiedWidth / 4;
+
+        let color = "rgb(144, 19, 19)"
+
+        switch (bot.getRole()) {
+            case "goldBot": {
+                color = "rgb(166, 164, 54)"
+                break;
+            }
+            case "blackBot": {
+                color = "rgb(0, 0, 0)"
+                break;
+            }
+            case "whiteBot": {
+                color = "rgb(255, 255, 255)"
+                break;
+            }
+            case "silverBot": {
+                color = "rgb(204, 204, 204)"
+                break;
+            }   
+        }
+
+
+        this.ctx.strokeStyle = color
+        this.ctx.lineWidth = 4;
+        this.ctx.strokeRect(x, y, width, height)
 
         const spriteW = this.itemsSprite.frameSize.x * this.itemsSprite.scale;
         const spriteH = this.itemsSprite.frameSize.y * this.itemsSprite.scale;
 
+        let dL: Vector2[] = [ // dL = drawLocation
+        new Vector2(x+whiteSpace, y+height/2 - spriteH / 2),
+        new Vector2(x+width/2 - spriteW/2, y+height/2-spriteH/2),
+        new Vector2(x+width-spriteW-whiteSpace, y+height/2-spriteH/2),
+        ];
+
         //silly pad
         if (bot && bot.getSelectedItem() == "itemSillyPad") {
-            this.ctx.fillStyle = 'rgba(255,255,255,0.2)';
-            this.ctx.fillRect(x, y+height/2 - spriteH / 2, spriteW, spriteH)
+            this.ctx.fillStyle = color;
+            this.ctx.fillRect(dL[0].x, dL[0].y, spriteW, spriteH)
+            dL[0].y = dL[0].y - 3 // makes currently selected item appear a little bit higher
         }
         this.itemsSprite.frame = 0
-        this.itemsSprite.drawImage(this.ctx, x, y + height/2)
+        this.itemsSprite.drawImage(this.ctx, dL[0].x, dL[0].y)
+
+        this.ctx.font = "Goldman-Bold"
+        this.ctx.fillStyle = '#fff';
+        this.ctx.font = '18px monospace';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(`0`, dL[0].x-2, dL[0].y+7);
 
         //wallbreaker
-        if (bot && bot.getSelectedItem() == "itemSillyPad") {
-            this.ctx.fillStyle = 'rgba(255,255,255,0.2)';
-            this.ctx.fillRect(x+width/2-spriteW/2, y+height/2 - spriteH / 2, spriteW, spriteH)
+        if (bot && bot.getSelectedItem() == "itemWallbreaker") {
+            this.ctx.fillStyle = color;
+            this.ctx.fillRect(dL[1].x, dL[1].y, spriteW, spriteH)
+            dL[1].y = dL[1].y - 3 // makes currently selected item appear a little bit higher
         }
         this.itemsSprite.frame = 1
-        this.itemsSprite.drawImage(this.ctx, x + width/2, y + height/2)
+        this.itemsSprite.drawImage(this.ctx, dL[1].x, dL[1].y )
         
         //ghost
-        if (bot && bot.getSelectedItem() == "itemSillyPad") {
-            this.ctx.fillStyle = 'rgba(255,255,255,0.2)';
-            this.ctx.fillRect(x+width-spriteW, y+height/2 - spriteH / 2, spriteW, spriteH)
+        if (bot && bot.getSelectedItem() == "itemGhost") {
+            this.ctx.fillStyle = color;
+            this.ctx.fillRect(dL[2].x, dL[2].y, spriteW, spriteH)
+            dL[2].y = dL[2].y - 3 // makes currently selected item appear a little bit higher
         }
         this.itemsSprite.frame = 2
-        this.itemsSprite.drawImage(this.ctx, x + width - spriteW, y + height/2)
+        this.itemsSprite.drawImage(this.ctx, dL[2].x, dL[2].y)
     }
        
 }

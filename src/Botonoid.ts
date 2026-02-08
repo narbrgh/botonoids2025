@@ -288,6 +288,18 @@ export default class Botonoid {
     return this.selectedItem;
   }
 
+  getNumSillypadsLeft(): number {
+    return this.numSillyPadsLeft
+  }
+
+  getNumWallbreakersLeft(): number {
+    return this.numWallbreakersLeft
+  }
+
+  getGhostCountLeft(): number {
+    return 40
+  }
+
   private handleAction(): void {
     console.log("handleAction");
 

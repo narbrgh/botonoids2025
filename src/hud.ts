@@ -6,8 +6,8 @@ import { resources } from "./Resources";
 import Vector2 from "./Vector2"
 import type { Role , ItemType } from "./protocol"
 
-const PLAYER_CARD_WIDTH = 100
-const PLAYER_CARD_HEIGHT = 34
+const PLAYER_CARD_WIDTH = 120
+const PLAYER_CARD_HEIGHT = 40
 const PLAYER_CARD_SPACING = 40
 
 export default class HUD {
@@ -20,7 +20,7 @@ export default class HUD {
     //class field
     private itemsSprite: Sprite = new Sprite({
         resource: resources.images.items,
-        frameSize: new Vector2(24, 24),
+        frameSize: new Vector2(32, 32),
         hFrames: 1,
         vFrames: 3,
         frame: 0,
@@ -61,9 +61,18 @@ export default class HUD {
         }
 
         // Time left
-        this.ctx.fillStyle = '#fff';
-        this.ctx.font = '16px monospace';
+        
+        this.ctx.font =  '400 30px "Goldman"';
         this.ctx.textBaseline = 'middle';
+        this.ctx.textAlign = "right";
+
+        this.ctx.lineWidth = 5;
+        this.ctx.strokeStyle = "#000000"
+        this.ctx.strokeText(`${timeLeft}`, x+ width - 50, y + height / 2);
+
+        this.ctx.fillStyle = '#ffffff';
+        if (timeLeft <= 30) {this.ctx.fillStyle = '#ff0000';}
+
         this.ctx.fillText(`${timeLeft}`, x+ width - 50, y + height / 2);
         
     }
@@ -145,11 +154,17 @@ export default class HUD {
         this.itemsSprite.frame = 0
         this.itemsSprite.drawImage(this.ctx, dL[0].x, dL[0].y)
 
-        this.ctx.font = "Goldman-Bold"
-        this.ctx.fillStyle = '#fff';
-        this.ctx.font = '18px monospace';
         this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(`0`, dL[0].x-2, dL[0].y+7);
+        this.ctx.textAlign = "left";
+        this.ctx.font =  '400 21px "Goldman"';
+
+        this.ctx.lineWidth = 4;
+        this.ctx.strokeStyle = "#000000"
+
+        this.ctx.fillStyle = '#ffffff';
+        
+        this.ctx.strokeText(String(bot.getNumSillypadsLeft()), dL[0].x+5, dL[0].y+spriteH/2+4);
+        this.ctx.fillText(String(bot.getNumSillypadsLeft()), dL[0].x+5, dL[0].y+spriteH/2+4);
 
         //wallbreaker
         if (bot && bot.getSelectedItem() == "itemWallbreaker") {
@@ -159,6 +174,10 @@ export default class HUD {
         }
         this.itemsSprite.frame = 1
         this.itemsSprite.drawImage(this.ctx, dL[1].x, dL[1].y )
+        this.ctx.strokeText(String(bot.getNumWallbreakersLeft()), dL[1].x + 5, dL[1].y + spriteH / 2 + 4);
+
+        this.ctx.fillStyle = '#fff';
+        this.ctx.fillText(String(bot.getNumWallbreakersLeft()), dL[1].x+5, dL[1].y+spriteH/2+4);
         
         //ghost
         if (bot && bot.getSelectedItem() == "itemGhost") {
@@ -168,6 +187,14 @@ export default class HUD {
         }
         this.itemsSprite.frame = 2
         this.itemsSprite.drawImage(this.ctx, dL[2].x, dL[2].y)
+
+        if (bot.getGhostCountLeft() > 0) {
+            this.ctx.font =  '400 19px "Goldman"';
+
+            this.ctx.lineWidth = 3;
+            this.ctx.strokeText(String(bot.getGhostCountLeft()), dL[2].x + 5, dL[2].y + spriteH / 2 + 4);
+            this.ctx.fillText(String(bot.getGhostCountLeft()), dL[2].x+5, dL[2].y+spriteH/2+4);
+        }
     }
        
 }

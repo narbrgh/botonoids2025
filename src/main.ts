@@ -340,6 +340,10 @@ function render() {
         bot.draw(ctx, nowMs);
       }
 
+      // draw HUD
+      const hudY = Y_DRAW_OFFSET + tileSize * rows
+      hud.draw({x: 0, y: hudY, width: canvas.width, height: canvas.height - hudY, timeLeft: secondsLeft, botsById, localPlayerId: net.playerId, numActivePlayers});
+
       drawText(ctx, '3 2 1 GO', canvas.width/2, canvas.height/2, {
         font: '400 88 px "Goldman"',
         stroke: '#000',
@@ -357,10 +361,7 @@ function render() {
       }
 
       // draw HUD
-      //***
-      drawText(ctx, String(secondsLeft), 100, 100);
       const hudY = Y_DRAW_OFFSET + tileSize * rows
-
       hud.draw({x: 0, y: hudY, width: canvas.width, height: canvas.height - hudY, timeLeft: secondsLeft, botsById, localPlayerId: net.playerId, numActivePlayers});
     
       break;

@@ -2,7 +2,7 @@ import {Sprite} from './Sprite';
 import { NUMBER_OF_COLORS, X_DRAW_OFFSET, Y_DRAW_OFFSET} from './Constants';
 import Vector2 from './Vector2';
 import { mulberry32 } from './rng';
-import type { SnapshotTileMap, SnapshotTile, TileChangeListMsg } from './protocol';
+import type { SnapshotTileMap, SnapshotTile, TileChangeListMsg, SillyPadMsg } from './protocol';
 
 export type ColorChangeResult =
   | 'colorChangeSuccessful'
@@ -16,6 +16,13 @@ export type ColorChangeResult =
     tileChangeDurTicks: number;
 }
 
+type SillyPadState = {
+    active: boolean;
+    ownerId: number;
+    expiresAtTick: number;
+    drawIndex: number;
+}
+
 export interface TileActions {
   initiateColorChange(tilePos: Vector2): ColorChangeResult;
 }
@@ -27,7 +34,9 @@ export default class TileMap {
 
     private readonly tileCount: number = 5; 
     private tiles: Tile[][];
+    private sillyPads: SillyPadState[][];
     private readonly tileSprite: Sprite;
+    private readonly sillyPadSprite: Sprite;
 
     private readonly getEstimatedTick: (nowMs: number) => number;
 
@@ -36,17 +45,21 @@ export default class TileMap {
         rows: number;
         tileSize: number;
         tileSprite: Sprite;
+        sillyPadSprite: Sprite;
         getEstimatedTick: (nowMs: number) => number;
     }) {
         this.cols = opts.cols;
         this.rows = opts.rows;
         this.tileSize = opts.tileSize;
         this.tileSprite = opts.tileSprite;
+        this.sillyPadSprite = opts.sillyPadSprite;
 
         this.getEstimatedTick = opts.getEstimatedTick;
 
         this.tiles = this.generateRandomTiles();
         this.randomizeBoard();
+
+        this.sillyPads = this.initializeSillyPads();
 
     }
 
@@ -56,6 +69,24 @@ export default class TileMap {
                 this.tiles[r][c].index = Math.floor(Math.random() * this.tileCount);
             }
         }
+    }
+
+    private initializeSillyPads(): SillyPadState[][] {
+        const out: SillyPadState[][] = [];
+        for (let r = 0; r < this.rows; r++) {
+            const row: SillyPadState[] = [];
+            for (let c = 0; c < this.cols; c++) {
+                const t: SillyPadState = {
+                    active: false,
+                    ownerId: 0,
+                    expiresAtTick: 0,
+                    drawIndex: 0,
+                }
+                row.push(t);
+            }
+            out.push(row)
+        }
+        return out
     }
 
     private generateRandomTiles(): Tile[][] {
@@ -99,6 +130,26 @@ export default class TileMap {
 
     reroll(): void {
         this.tiles = this.generateRandomTiles();
+        this.sillyPads = this.initializeSillyPads();
+    }
+
+    setSillyPadFromServerMessage(m: SillyPadMsg) {
+        if (m.action === "create") {
+            this.createSillyPad(m.x, m.y, m.ownerId, m.expiresAtTick) 
+        } else {
+            //this.removeSillyPad(m.x, m.y);
+        }
+    }
+
+    createSillyPad(x: number, y: number, ownerId: number, expiresAtTick: number) {
+        if (!this.inBounds(new Vector2(x, y))) {
+            return
+        }
+        this.sillyPads[y][x].active = true
+        this.sillyPads[y][x].drawIndex = 0 //TODO make draw index correct
+        this.sillyPads[y][x].ownerId = ownerId
+        this.sillyPads[y][x].expiresAtTick = expiresAtTick
+        console.log("created silly pad at %d, %d", x, y);
     }
 
     rerollWithSeed(seed: number): void {
@@ -106,7 +157,7 @@ export default class TileMap {
     }
 
     setAuthoritativeInitiateColorChange(tilePos: Vector2, toIndex: number, tileChangeStartTick: number, tileChangeDurTicks: number): void {
-        console.log("setAuthoritativeInidiateColorChange");
+        console.log("setAuthoritativeInitiateColorChange");
         if (this.inBounds(tilePos)) {
             this.tiles[tilePos.y][tilePos.x].index = toIndex; // TODO tile change index changed, check locally for a "combo"
             this.tiles[tilePos.y][tilePos.x].changing = true;
@@ -190,6 +241,8 @@ export default class TileMap {
                 const x = c * this.tileSize + X_DRAW_OFFSET;
                 const y = r * this.tileSize + Y_DRAW_OFFSET;
 
+                //first draw the tiles
+
                 this.tileSprite.frame = index;
                 this.tileSprite.drawImage(ctx,x,y);
 
@@ -201,6 +254,12 @@ export default class TileMap {
 
                     const alpha = this.getAlpha(nowMs, this.tiles[r][c]);
                     this.tileSprite.drawImageWithOpacity(ctx, x, y, alpha);
+                }
+
+                //now draw silly pad
+                if (this.sillyPads[r][c].active) {
+                    this.sillyPadSprite.frame = this.sillyPads[r][c].drawIndex
+                    this.sillyPadSprite.drawImage(ctx,x,y)
                 }
 
             }

@@ -6,7 +6,7 @@ import Vector2 from './Vector2';
 import { resources } from './Resources';
 import TileMap from './TileMap';
 import Botonoid from './Botonoid';
-import type { PlayerSnapshotMsg, TileMapSnapshotMsg, TileChangeMsg , TileInitiateChangeMsg, TileChangeListMsg} from './protocol'
+import type { PlayerSnapshotMsg, TileMapSnapshotMsg, TileChangeMsg , TileInitiateChangeMsg, TileChangeListMsg, SillyPadAction, SillyPadMsg} from './protocol'
 import type { Phase , Role , Model } from './protocol';
 import {initLobbyUI, lobbyState } from "./lobby";
 
@@ -74,6 +74,15 @@ const tileSprite = new Sprite({
   frameSize: new Vector2(FRAME_SIZE, FRAME_SIZE),
   hFrames: 1,
   vFrames: 17,
+  frame: 0,
+  scale: TILE_SIZE / FRAME_SIZE, // keep this an integer for pixel art
+});
+
+const sillyPadSprite = new Sprite({
+  resource: resources.images.sillyPads,
+  frameSize: new Vector2(FRAME_SIZE, FRAME_SIZE),
+  hFrames: 1,
+  vFrames: 4,
   frame: 0,
   scale: TILE_SIZE / FRAME_SIZE, // keep this an integer for pixel art
 });
@@ -170,12 +179,18 @@ net.onTileChangeList = (m: TileChangeListMsg) => {
   if (tileMap) {tileMap.setAuthoritativeTileChangeList(m)}
 }
 
+net.onSillyPadMsg = (m: SillyPadMsg) => {
+  //if (tileMap) {tileMap.updateSillyPad(m)}
+  console.log("silly pad message received")
+  if (tileMap) {tileMap.setSillyPadFromServerMessage(m)};
+}
+
 net.onConfig = (c) => {
   console.log('server config', c); 
   cols = c.cols;
   rows = c.rows;
 
-  tileMap = new TileMap({ cols, rows, tileSize, tileSprite, getEstimatedTick });
+  tileMap = new TileMap({ cols, rows, tileSize, tileSprite, sillyPadSprite, getEstimatedTick });
   tileMap.rerollWithSeed(c.seed);
 
   clock.updateConfig(c.tickHz);

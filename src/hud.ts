@@ -7,7 +7,7 @@ import Vector2 from "./Vector2"
 import type { Role , ItemType } from "./protocol"
 
 const PLAYER_CARD_WIDTH = 120
-const PLAYER_CARD_HEIGHT = 40
+const PLAYER_CARD_HEIGHT = 44
 const PLAYER_CARD_SPACING = 40
 
 export default class HUD {
@@ -72,8 +72,11 @@ export default class HUD {
 
         this.ctx.fillStyle = '#ffffff';
         if (timeLeft <= 30) {this.ctx.fillStyle = '#ff0000';}
-
         this.ctx.fillText(`${timeLeft}`, x+ width - 50, y + height / 2);
+
+        
+
+        
         
     }
 
@@ -111,22 +114,27 @@ export default class HUD {
         const whiteSpace = unoccupiedWidth / 4;
 
         let color = "rgb(144, 19, 19)"
+        let color2 = "#ffffff"
 
         switch (bot.getRole()) {
             case "goldBot": {
                 color = "rgb(166, 164, 54)"
+                color2 = "#915252"
                 break;
             }
             case "blackBot": {
                 color = "rgb(0, 0, 0)"
+                color2 = "#5cadf4"
                 break;
             }
             case "whiteBot": {
                 color = "rgb(255, 255, 255)"
+                color2 = "#ff0000"
                 break;
             }
             case "silverBot": {
-                color = "rgb(204, 204, 204)"
+                color = "rgb(135, 135, 135)"
+                color2 = "#b77736"
                 break;
             }   
         }
@@ -147,8 +155,14 @@ export default class HUD {
 
         //silly pad
         if (bot && bot.getSelectedItem() == "itemSillyPad") {
+
             this.ctx.fillStyle = color;
             this.ctx.fillRect(dL[0].x, dL[0].y, spriteW, spriteH)
+            
+            this.ctx.strokeStyle = color2
+            this.ctx.lineWidth = 2
+            this.ctx.strokeRect(dL[0].x, dL[0].y, spriteW, spriteH)
+
             dL[0].y = dL[0].y - 3 // makes currently selected item appear a little bit higher
         }
         this.itemsSprite.frame = 0
@@ -158,31 +172,43 @@ export default class HUD {
         this.ctx.textAlign = "left";
         this.ctx.font =  '400 21px "Goldman"';
 
-        this.ctx.lineWidth = 4;
+        this.ctx.lineWidth = 3;
+        this.ctx.fillStyle = '#ffffff';
         this.ctx.strokeStyle = "#000000"
 
-        this.ctx.fillStyle = '#ffffff';
-        
         this.ctx.strokeText(String(bot.getNumSillypadsLeft()), dL[0].x+5, dL[0].y+spriteH/2+4);
-        this.ctx.fillText(String(bot.getNumSillypadsLeft()), dL[0].x+5, dL[0].y+spriteH/2+4);
+        this.ctx.fillText(String(bot.getNumSillypadsLeft()), dL[0].x+5, dL[0].y+spriteH/2+4);        
 
         //wallbreaker
         if (bot && bot.getSelectedItem() == "itemWallbreaker") {
             this.ctx.fillStyle = color;
             this.ctx.fillRect(dL[1].x, dL[1].y, spriteW, spriteH)
+
+            this.ctx.strokeStyle = color2
+            this.ctx.lineWidth = 2
+            this.ctx.strokeRect(dL[1].x, dL[1].y, spriteW, spriteH)
+
             dL[1].y = dL[1].y - 3 // makes currently selected item appear a little bit higher
         }
         this.itemsSprite.frame = 1
         this.itemsSprite.drawImage(this.ctx, dL[1].x, dL[1].y )
-        this.ctx.strokeText(String(bot.getNumWallbreakersLeft()), dL[1].x + 5, dL[1].y + spriteH / 2 + 4);
 
-        this.ctx.fillStyle = '#fff';
-        this.ctx.fillText(String(bot.getNumWallbreakersLeft()), dL[1].x+5, dL[1].y+spriteH/2+4);
-        
+        this.ctx.lineWidth = 3;
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.strokeStyle = "#000000"
+
+        this.ctx.strokeText(String(bot.getNumWallbreakersLeft()), dL[1].x + 5, dL[1].y + spriteH / 2 + 4);
+        this.ctx.fillText(String(bot.getNumWallbreakersLeft()), dL[1].x+5, dL[1].y+spriteH/2+4);        
+
         //ghost
-        if (bot && bot.getSelectedItem() == "itemGhost") {
+        if (bot && bot.getSelectedItem() == "itemGhost") {      
             this.ctx.fillStyle = color;
             this.ctx.fillRect(dL[2].x, dL[2].y, spriteW, spriteH)
+
+            this.ctx.strokeStyle = color2
+            this.ctx.lineWidth = 2
+            this.ctx.strokeRect(dL[2].x, dL[2].y, spriteW, spriteH)
+
             dL[2].y = dL[2].y - 3 // makes currently selected item appear a little bit higher
         }
         this.itemsSprite.frame = 2
@@ -192,6 +218,9 @@ export default class HUD {
             this.ctx.font =  '400 19px "Goldman"';
 
             this.ctx.lineWidth = 3;
+            this.ctx.fillStyle = '#ffffff';
+            this.ctx.strokeStyle = "#000000"
+
             this.ctx.strokeText(String(bot.getGhostCountLeft()), dL[2].x + 5, dL[2].y + spriteH / 2 + 4);
             this.ctx.fillText(String(bot.getGhostCountLeft()), dL[2].x+5, dL[2].y+spriteH/2+4);
         }

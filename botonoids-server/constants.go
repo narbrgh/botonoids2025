@@ -9,6 +9,7 @@ const (
 	MoveTicks          = 6 // 500 ms at 20 Hz -> 10 ticks. If you change this here, change in Constants.ts (TODO: make this take in the Constants file movement speed)
 	ColorChangeTicks   = 35
 	CooldownTicks      = 45
+	SillyPadTicks      = 65 * 20
 	WorldCols          = 30 // temporary bounds for now (TODO update this later)
 	WorldRows          = 16
 	SpawnBaseX         = 6

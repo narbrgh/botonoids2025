@@ -1,5 +1,5 @@
 import type { Command } from '../commands';
-import type { PlayerSnapshotMsg, TileMapSnapshotMsg, ConfigMsg, TileChangeMsg, TileInitiateChangeMsg, TileChangeListMsg, RoleInvalidMsg} from '../protocol';
+import type { PlayerSnapshotMsg, TileMapSnapshotMsg, ConfigMsg, TileChangeMsg, TileInitiateChangeMsg, TileChangeListMsg, RoleInvalidMsg, SillyPadMsg, SillyPadAction} from '../protocol';
 
 type HelloMsg = { type: 'hello'; playerId: number; msg?: string };
 
@@ -26,6 +26,7 @@ export default class NetClient {
     { guard: this.isTileChangeListMsg, handle: (m: TileChangeListMsg) => {this.onTileChangeList?.(m); }},
     { guard: this.isTileInitiateChangeMsg, handle: (m: TileInitiateChangeMsg) => { this.onTileInitiateChange?.(m); } },
     { guard: this.isRoleInvalidMsg,  handle: (m: RoleInvalidMsg) => { this.onRoleInvalid?.(m); } },
+    { guard: this.isSillyPadMsg, handle: (m: SillyPadMsg) => {this.onSillyPadMsg?.(m); } },
   ];
 
 
@@ -82,6 +83,21 @@ export default class NetClient {
         Array.isArray((x as any).players)
     );
   }
+
+  private isSillyPadMsg(x: unknown): x is SillyPadMsg {
+    return (
+      typeof x === 'object' &&
+      x != null &&
+      (x as any).type === 'sillyPadMsg' &&
+      typeof (x as any).action === 'string' &&
+      ((x as any).action === 'create' || (x as any).action === 'remove') &&
+      typeof (x as any).x === 'number' &&
+      typeof (x as any).ownerId === 'number' &&
+      typeof (x as any).expiresAtTick === 'number' 
+    );
+  }
+
+
 
   private isTileMapSnapshotMsg(x: unknown): x is TileMapSnapshotMsg {
     return (
@@ -147,6 +163,7 @@ export default class NetClient {
   onTileChangeList?: (m: TileChangeListMsg) => void;
   onTileInitiateChange?: (m: TileInitiateChangeMsg) => void;
   onRoleInvalid?: (m: RoleInvalidMsg) => void;  
+  onSillyPadMsg?: (m: SillyPadMsg) => void;
 
   sendCommand(cmd: Command) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;

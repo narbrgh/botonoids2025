@@ -175,6 +175,15 @@ type TileChangeListMsg struct { // a list of several tile changes, such as when 
 	TileChangeList []TileDelta `json:"tileChangeList"`
 }
 
+type SillyPadMsg struct {
+	Type          string         `json:"type"` //sillyPadMsg
+	Action        SillyPadAction `json:"action"`
+	X             int            `json:"x"`
+	Y             int            `json:"y"`
+	OwnerId       int            `json:"ownerId"`
+	ExpiresAtTick uint64         `json:"expiresAtTick"`
+}
+
 type TileInitiateChangeMsg struct {
 	Type                string `json:"type"` // "tileInitiateChange"
 	X                   int    `json:"x"`

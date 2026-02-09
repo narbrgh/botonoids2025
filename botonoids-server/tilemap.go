@@ -11,13 +11,21 @@ type Tile struct {
 	TileChangeDurTicks  uint64 `json:"tileChangeDurTicks"`
 }
 
+type SillyPadState struct {
+	Active        bool   `json:"active"`
+	OwnerId       int    `json:"ownerID`
+	StartTick     uint64 `json:"-"` // start tick is needed so that if two players place a silly pad on the SAME tick, only the first one is accepted, so there are no "conflicts" between server and client
+	ExpiresAtTick uint64 `json:"expiresAtTick"`
+}
+
 type TileMap struct {
-	Cols        int         `json:"cols"`
-	Rows        int         `json:"rows"`
-	Tiles       [][]Tile    `json:"tiles"`
-	tempTileMap [][]bool    `json:"-"` // tempTileMap is used to check for combos and walls, then implement them without running the flood fill algo twice
-	pending     []TileDelta `json:"-"`
-	rng         *rand.Rand  `json:"-"`
+	Cols        int               `json:"cols"`
+	Rows        int               `json:"rows"`
+	Tiles       [][]Tile          `json:"tiles"`
+	tempTileMap [][]bool          `json:"-"` // tempTileMap is used to check for combos and walls, then implement them without running the flood fill algo twice
+	pending     []TileDelta       `json:"-"`
+	SillyPads   [][]SillyPadState `json:"sillyPads"`
+	rng         *rand.Rand        `json:"-"`
 
 	//variables for checking for garden
 	leftEdgeHit   bool `json:"-"`
@@ -26,8 +34,9 @@ type TileMap struct {
 	bottomEdgeHit bool `json:"-"`
 	enemyWallHit  bool `json:"-"`
 
+	// Regarding gardens:
+	//
 	// TempTileMap  shows true / false for what what "checked"
-
 	// RegionTileMap makes it so only the "region" (continuous area) that met criteria to become a garden actually
 	// becomes a garden
 	regionTileMap [][]bool `json:"-"`
@@ -56,24 +65,33 @@ func NewTileMap(cols, rows int, seed int64) *TileMap {
 	temp := make([][]bool, rows)
 	garden := make([][]bool, rows)
 	region := make([][]bool, rows)
+	sillyPads := make([][]SillyPadState, rows)
+
 	for y := 0; y < rows; y++ {
 		t[y] = make([]Tile, cols)
 		temp[y] = make([]bool, cols)
 		garden[y] = make([]bool, cols)
 		region[y] = make([]bool, cols)
+		sillyPads[y] = make([]SillyPadState, cols)
+
 		for x := 0; x < cols; x++ {
 			t[y][x].Index = uint8(rng.Intn(NumColors))
 			t[y][x].Changing = false
 			t[y][x].TileChangeStartTick = 0
 			t[y][x].TileChangeDurTicks = 0
 			temp[y][x] = false
-			garden[y][x] = false
-			region[y][x] = false
+
+			sillyPads[y][x].Active = false
+			sillyPads[y][x].StartTick = 0
+			sillyPads[y][x].ExpiresAtTick = 0
+			sillyPads[y][x].OwnerId = -1
 
 			//variables for checking for garden
+			garden[y][x] = false
+			region[y][x] = false
 		}
 	}
-	return &TileMap{Cols: cols, Rows: rows, Tiles: t, tempTileMap: temp, gardenTileMap: garden, regionTileMap: region, rng: rng}
+	return &TileMap{Cols: cols, Rows: rows, Tiles: t, tempTileMap: temp, gardenTileMap: garden, regionTileMap: region, SillyPads: sillyPads, rng: rng}
 }
 
 func (tm *TileMap) SetTile(x, y int, index uint8) bool {
@@ -165,6 +183,30 @@ func TileMapInitiateColorChange(tm *TileMap, x, y int, index uint8, startTick ui
 	tm.Tiles[y][x].TileChangeDurTicks = numTicks
 
 	return 0
+}
+
+func (tm *TileMap) CreateSillyPad(x, y int, playerId int, startTick uint64, numTicks uint64) bool {
+	//Note! Placing a SillyPad will over-write the previous SillyPad.
+	//This means a player can "refresh" their silly pads
+	//This also means that if two players are on the same square, and one player places one,
+	//the other player can then place one to "over-write" their opponent's silly pad!
+	if !tm.InBounds(x, y) {
+		return false
+	}
+
+	if tm.SillyPads[y][x].Active && tm.SillyPads[y][x].StartTick == startTick {
+		// if another player made a silly pad on the EXACT SAME TICK, then don't make one, and return false
+		//this will prevent "collisions" where two silly pads are made concurrently, and then the order that each
+		//client receives the silly pad message would determine (non-deterministically) which player's silly pad "sticks"
+
+		return false
+	}
+
+	tm.SillyPads[y][x].Active = true
+	tm.SillyPads[y][x].OwnerId = playerId
+	tm.SillyPads[y][x].ExpiresAtTick = startTick + numTicks
+
+	return true
 }
 
 func (tm *TileMap) CheckForCombo(x, y int, index uint8) int { //returns combo size
@@ -416,6 +458,12 @@ func (tm *TileMap) Update(currentTick uint64) {
 				deltaTime := currentTick - tm.Tiles[y][x].TileChangeStartTick
 				if deltaTime >= tm.Tiles[y][x].TileChangeDurTicks { // tile change is done
 					tm.Tiles[y][x].Changing = false
+				}
+			}
+			if tm.SillyPads[y][x].Active {
+				if tm.SillyPads[y][x].ExpiresAtTick >= currentTick {
+					tm.SillyPads[y][x].Active = false
+
 				}
 			}
 		}

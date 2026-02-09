@@ -1,5 +1,7 @@
 package main
 
+import "encoding/json"
+
 func isValidDir(d DirType) bool {
 	switch d {
 	case Up, Down, Left, Right:
@@ -170,6 +172,34 @@ func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
 	case "actionUp":
 		//only meaningful for wallBuilding
 		p.ActionPressed = false
+
+	case "changeItem":
+		switch p.SelectedItem {
+		case ItemSillyPad:
+			p.SelectedItem = ItemWallbreaker
+
+		case ItemWallbreaker:
+			p.SelectedItem = ItemGhost
+
+		case ItemGhost:
+			p.SelectedItem = ItemSillyPad
+		}
+	case "useItem":
+		switch p.SelectedItem {
+		case ItemSillyPad:
+			if p.NumSillyPadsLeft > 0 {
+				if room.Map.CreateSillyPad(p.X, p.Y, p.ID, room.Tick, SillyPadTicks) {
+					//silly pad created
+					p.NumSillyPadsLeft--
+
+					//now send a message
+					msg := SillyPadMsg{Type: "sillyPadMsg", Action: "create", X: p.X, Y: p.Y, OwnerId: p.ID, ExpiresAtTick: room.Tick + SillyPadTicks}
+					if b, err := json.Marshal(msg); err == nil {
+						broadcast(room, b)
+					}
+				}
+			}
+		}
 
 	case "input":
 		cmd, err := decodeInputCmd(qc.Cmd)

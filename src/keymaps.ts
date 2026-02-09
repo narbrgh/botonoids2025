@@ -15,7 +15,7 @@ export const P2_KEYS: KeyMap = {
     down: ['ArrowDown'],
     left: ['ArrowLeft'],
     right: ['ArrowRight'],
-    action: ['Enter'],
-    changeItem: ['/'],
-    useItem: ['Shift'],
+    action: ['Space', ' '],
+    changeItem: ['Shift'],
+    useItem: ['Control','e','E'],
 };

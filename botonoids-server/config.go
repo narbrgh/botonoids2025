@@ -6,6 +6,7 @@ type Phase string
 type Role string
 type Model string
 type ItemType string
+type SillyPadAction string
 
 const (
 	Up    DirType = "up"
@@ -49,6 +50,11 @@ const (
 	ItemSillyPad    ItemType = "itemSillyPad"
 	ItemWallbreaker ItemType = "itemWallbreaker"
 	ItemGhost       ItemType = "itemGhost"
+)
+
+const (
+	SillyPadCreate SillyPadAction = "create"
+	SillyPadRemove SillyPadAction = "remove"
 )
 
 func makeConfig() ConfigMsg {

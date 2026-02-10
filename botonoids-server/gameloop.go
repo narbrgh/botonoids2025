@@ -286,7 +286,7 @@ func runGameLoop(room *Room) {
 			}
 
 			// bounds/collision check here; if blocked, do not start move
-			if nx < 0 || nx >= WorldCols || ny < 0 || ny >= WorldRows {
+			if !room.Map.CheckMovement(nx, ny, p.ID, p.WallIndex) {
 				continue
 			}
 
@@ -299,7 +299,16 @@ func runGameLoop(room *Room) {
 
 		// 6) Updaters. (tile, player, etc)
 		room.UpdatePhase()
-		room.Map.Update(room.Tick)
+		sillyPadRemoved, expired := room.Map.Update(room.Tick)
+		if sillyPadRemoved {
+			for _, p := range expired {
+				//now send a message
+				msg := SillyPadMsg{Type: "sillyPadMsg", Action: "remove", X: p.X, Y: p.Y}
+				if b, err := json.Marshal(msg); err == nil {
+					broadcast(room, b)
+				}
+			}
+		}
 
 		for _, p := range room.Players {
 			p.Update(room.Tick)

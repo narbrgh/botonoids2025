@@ -13,9 +13,14 @@ type Tile struct {
 
 type SillyPadState struct {
 	Active        bool   `json:"active"`
-	OwnerId       int    `json:"ownerID`
+	OwnerId       int    `json:"ownerID"`
 	StartTick     uint64 `json:"-"` // start tick is needed so that if two players place a silly pad on the SAME tick, only the first one is accepted, so there are no "conflicts" between server and client
 	ExpiresAtTick uint64 `json:"expiresAtTick"`
+}
+
+type SillyPadPos struct {
+	X int `json:"x"`
+	Y int `json:"y"`
 }
 
 type TileMap struct {
@@ -450,7 +455,10 @@ func (tm *TileMap) InBounds(x, y int) bool {
 	return true
 }
 
-func (tm *TileMap) Update(currentTick uint64) {
+func (tm *TileMap) Update(currentTick uint64) (bool, []SillyPadPos) {
+
+	returnValue := false
+	expired := make([]SillyPadPos, 0, 8)
 
 	for x := 0; x < tm.Cols; x++ {
 		for y := 0; y < tm.Rows; y++ {
@@ -461,13 +469,36 @@ func (tm *TileMap) Update(currentTick uint64) {
 				}
 			}
 			if tm.SillyPads[y][x].Active {
-				if tm.SillyPads[y][x].ExpiresAtTick >= currentTick {
+				if currentTick >= tm.SillyPads[y][x].ExpiresAtTick {
 					tm.SillyPads[y][x].Active = false
-
+					returnValue = true // returns true if silly pad "times out" -- this way gameloop.go knows to send signal to client
+					expired = append(expired, SillyPadPos{X: x, Y: y})
 				}
 			}
 		}
 	}
+	return returnValue, expired
+}
+
+func (tm *TileMap) CheckMovement(nx int, ny int, id int, playerWallIndex uint8) bool {
+	if !tm.InBounds(nx, ny) {
+		return false
+	}
+
+	if IsTileAWall(tm.Tiles[ny][nx].Index) {
+		if tm.Tiles[ny][nx].Index != playerWallIndex {
+			return false
+		}
+	}
+
+	if tm.SillyPads[ny][nx].Active {
+		if tm.SillyPads[ny][nx].OwnerId != id {
+			return false
+		}
+	}
+
+	return true
+
 }
 
 func (tm *TileMap) InitiateCombo(foundationTileIndex uint8) {

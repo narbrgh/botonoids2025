@@ -1,5 +1,5 @@
 import {Sprite} from './Sprite';
-import { NUMBER_OF_COLORS, X_DRAW_OFFSET, Y_DRAW_OFFSET} from './Constants';
+import { NUMBER_OF_COLORS, SERVER_TICK_HZ, X_DRAW_OFFSET, Y_DRAW_OFFSET} from './Constants';
 import Vector2 from './Vector2';
 import { mulberry32 } from './rng';
 import type { SnapshotTileMap, SnapshotTile, TileChangeListMsg, SillyPadMsg } from './protocol';
@@ -133,23 +133,31 @@ export default class TileMap {
         this.sillyPads = this.initializeSillyPads();
     }
 
-    setSillyPadFromServerMessage(m: SillyPadMsg) {
+    setSillyPadFromServerMessage(m: SillyPadMsg, spriteIndex: number) {
         if (m.action === "create") {
-            this.createSillyPad(m.x, m.y, m.ownerId, m.expiresAtTick) 
+            this.createSillyPad(m.x, m.y, m.ownerId, m.expiresAtTick, spriteIndex) 
         } else {
-            //this.removeSillyPad(m.x, m.y);
+            this.removeSillyPad(m.x, m.y);
         }
     }
 
-    createSillyPad(x: number, y: number, ownerId: number, expiresAtTick: number) {
+    createSillyPad(x: number, y: number, ownerId: number, expiresAtTick: number, spriteIndex: number) {
         if (!this.inBounds(new Vector2(x, y))) {
             return
         }
         this.sillyPads[y][x].active = true
-        this.sillyPads[y][x].drawIndex = 0 //TODO make draw index correct
+        this.sillyPads[y][x].drawIndex = spriteIndex
         this.sillyPads[y][x].ownerId = ownerId
         this.sillyPads[y][x].expiresAtTick = expiresAtTick
         console.log("created silly pad at %d, %d", x, y);
+    }
+
+    removeSillyPad(x: number, y: number) {
+        if (!this.inBounds(new Vector2(x, y))) {
+            return
+        }
+
+        this.sillyPads[y][x].active = false
     }
 
     rerollWithSeed(seed: number): void {
@@ -233,6 +241,16 @@ export default class TileMap {
         return tt * tt ;//* (3 - 2 * tt); // smoothing function: fast->slow->fast
     }
 
+    private getSillyPadAlpha(nowMs: number, a: number): number {
+        //for the first (N-1) seconds, the silly pad has an alpha of 1.
+        // Then for the final second, it fades smoothly from 1 to 0 over that second
+        
+        const estTick = this.getEstimatedTick(nowMs)
+        const t = (a - estTick) / SERVER_TICK_HZ; // dividing by SERVER_TICK_HZ makes the silly pad fade-out take 1 second
+        const tt = Math.max(0, Math.min(1, t)); //clamp to 0, 1
+        return tt
+    }
+
     draw(ctx: CanvasRenderingContext2D, nowMs: number): void {
         // if the underlying resource isn't loaded yet, Sprite.drawImage won't draw it
         for (let r = 0; r < this.rows; r++) {
@@ -259,7 +277,9 @@ export default class TileMap {
                 //now draw silly pad
                 if (this.sillyPads[r][c].active) {
                     this.sillyPadSprite.frame = this.sillyPads[r][c].drawIndex
-                    this.sillyPadSprite.drawImage(ctx,x,y)
+                    
+                    const alpha = this.getSillyPadAlpha(nowMs, this.sillyPads[r][c].expiresAtTick);
+                    this.sillyPadSprite.drawImageWithOpacity(ctx,x,y, alpha)
                 }
 
             }

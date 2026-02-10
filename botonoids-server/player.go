@@ -105,7 +105,7 @@ func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
 		}
 		p.Facing = cmd.Dir // or just cmd.Dir if string
 
-	case "move":
+	case "move": // NOTE! This code is no longer "called."
 		cmd, err := decodeMoveCmd(qc.Cmd)
 		if err != nil || !isValidDir(cmd.Dir) {
 			return
@@ -132,7 +132,7 @@ func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
 		}
 
 		//bounds (temporary) TODO update this code, including "collision"
-		if nx < 0 || nx >= WorldCols || ny < 0 || ny >= WorldRows {
+		if !room.Map.CheckMovement(nx, ny, p.ID, p.WallIndex) {
 			return
 		}
 

@@ -180,9 +180,26 @@ net.onTileChangeList = (m: TileChangeListMsg) => {
 }
 
 net.onSillyPadMsg = (m: SillyPadMsg) => {
-  //if (tileMap) {tileMap.updateSillyPad(m)}
+  
   console.log("silly pad message received")
-  if (tileMap) {tileMap.setSillyPadFromServerMessage(m)};
+
+  let j = 0;
+
+  if (m.action == "create") {
+
+    let i = botsById.get(m.ownerId)?.getRole();
+
+    if (!i){return}
+    switch (i) {
+      case "silverBot": j = 0; break;
+      case "goldBot": j = 1; break;
+      case "whiteBot": j = 2; break;
+      case "blackBot": j = 3; break;
+      default: return;
+    }
+  }
+
+  if (tileMap) {tileMap.setSillyPadFromServerMessage(m, j)};
 }
 
 net.onConfig = (c) => {

@@ -78,9 +78,20 @@ export default class Botonoid {
     return this.moveState !== null;
   }
 
+  canMakeMove(id: number, nextTileX: number, nextTileY: number, cols: number, rows: number): boolean {
+    if (nextTileX < 0 || nextTileX >= cols || nextTileY < 0 || nextTileY >= rows) return false
+    
+    return true
+  }
+
+  //I don't think applyCommand is currently used; all movement is handled through server first
+  //For now it's fast enough that I think it's fine. If it seems like movement is "laggy" then
+  // I may need to re-implement this
+  
   applyCommand(cmd: Command, cols: number, rows: number): void {
     //if (cmd.type === 'action') {this.handleAction(); return;} //ERIKISCOOL
-    
+    console.log("beginning of apply command")
+
     if (cmd.type !== 'move') return; // for now, we are only programming move commands
 
     //ignore move commands while already moving
@@ -95,7 +106,7 @@ export default class Botonoid {
     const nextTileY = this.tilePos.y + dy;
 
     // bounds check (TODO collision check against tile map)
-    if (nextTileX < 0 || nextTileX >= cols || nextTileY < 0 || nextTileY >= rows) {
+    if (!this.canMakeMove(this.id, nextTileX, nextTileY, cols, rows)) {
         return;
     }
 
@@ -109,6 +120,8 @@ export default class Botonoid {
         durationMs: MOVE_DURATION_MS, // 1/2 second
         targetTile: new Vector2(nextTileX, nextTileY),
     };
+
+    console.log("end of apply command")
   }
 
   private static dirToFrame(dir: DirType): number {

@@ -204,6 +204,32 @@ func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
 					}
 				}
 			}
+		case ItemWallbreaker:
+			nx := p.X
+			ny := p.Y
+
+			if p.NumWallbreakersLeft > 0 {
+				switch p.Facing {
+				case Up:
+					ny--
+				case Down:
+					ny++
+				case Left:
+					nx--
+				case Right:
+					nx++
+				}
+
+				if room.Map.CreateWallbreaker(nx, ny, room.Tick, WallbreakerTicks) {
+					p.NumWallbreakersLeft--
+
+					//now send a message
+					msg := WallbreakerMsg{Type: "wallbreakerMsg", Action: "create", X: nx, Y: ny, StartTick: room.Tick, ExpiresAtTick: room.Tick + WallbreakerTicks}
+					if b, err := json.Marshal(msg); err == nil {
+						broadcast(room, b)
+					}
+				}
+			}
 		}
 
 	case "input":

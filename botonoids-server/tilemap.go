@@ -23,6 +23,13 @@ type SillyPadPos struct {
 	Y int `json:"y"`
 }
 
+type Wallbreaker struct {
+	X             int    `json:"x"`
+	Y             int    `json:"y"`
+	StartTick     uint64 `json:"startTick"`
+	ExpiresAtTick uint64 `json:"expiresAtTick"`
+}
+
 type TileMap struct {
 	Cols        int               `json:"cols"`
 	Rows        int               `json:"rows"`
@@ -48,6 +55,8 @@ type TileMap struct {
 
 	// gardenTileMap are the actual tiles that become garden
 	gardenTileMap [][]bool `json:"-"`
+
+	Wallbreakers []Wallbreaker `json:"wallbreakers"`
 }
 
 type TileDelta struct { //TileDelta is used for the multiple-tile-change-broadcast (such as combos and walls)
@@ -71,6 +80,7 @@ func NewTileMap(cols, rows int, seed int64) *TileMap {
 	garden := make([][]bool, rows)
 	region := make([][]bool, rows)
 	sillyPads := make([][]SillyPadState, rows)
+	wallbreakers := make([]Wallbreaker, 0)
 
 	for y := 0; y < rows; y++ {
 		t[y] = make([]Tile, cols)
@@ -96,7 +106,7 @@ func NewTileMap(cols, rows int, seed int64) *TileMap {
 			region[y][x] = false
 		}
 	}
-	return &TileMap{Cols: cols, Rows: rows, Tiles: t, tempTileMap: temp, gardenTileMap: garden, regionTileMap: region, SillyPads: sillyPads, rng: rng}
+	return &TileMap{Cols: cols, Rows: rows, Tiles: t, tempTileMap: temp, gardenTileMap: garden, regionTileMap: region, SillyPads: sillyPads, Wallbreakers: wallbreakers, rng: rng}
 }
 
 func (tm *TileMap) SetTile(x, y int, index uint8) bool {
@@ -546,4 +556,13 @@ func (tm *TileMap) ResetFoundationTiles(foundationTileIndex uint8) {
 
 		}
 	}
+}
+
+func (tm *TileMap) CreateWallbreaker(x int, y int, currentTick uint64, numTicksAlive uint64) bool {
+	if !tm.InBounds(x, y) {
+		return false
+	}
+
+	tm.Wallbreakers = append(tm.Wallbreakers, Wallbreaker{X: x, Y: y, StartTick: currentTick, ExpiresAtTick: (currentTick + numTicksAlive)})
+	return true
 }

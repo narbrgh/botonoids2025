@@ -177,10 +177,19 @@ type TileChangeListMsg struct { // a list of several tile changes, such as when 
 
 type SillyPadMsg struct {
 	Type          string         `json:"type"` //sillyPadMsg
-	Action        SillyPadAction `json:"action"`
+	Action        CreateOrRemove `json:"action"`
 	X             int            `json:"x"`
 	Y             int            `json:"y"`
 	OwnerId       int            `json:"ownerId"`
+	ExpiresAtTick uint64         `json:"expiresAtTick"`
+}
+
+type WallbreakerMsg struct {
+	Type          string         `json:"type"` //wallbreakerMsg
+	Action        CreateOrRemove `json:"action"`
+	X             int            `json:"x"`
+	Y             int            `json:"y"`
+	StartTick     uint64         `json:"startTick"`
 	ExpiresAtTick uint64         `json:"expiresAtTick"`
 }
 

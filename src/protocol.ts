@@ -13,7 +13,7 @@ export type Role = typeof roles[number];
 
 export type ItemType = "itemSillyPad" | "itemWallbreaker" | "itemGhost"
 
-export type SillyPadAction = "create" | "remove"
+export type CreateOrRemove = "create" | "remove"
 
 export const models = ["alphanoid","herbanoid","barvinoid","randomnoid"] as const;
 export type Model = typeof models[number];
@@ -94,10 +94,19 @@ export type TileMapSnapshotMsg = {
 
 export type SillyPadMsg = {
   type: 'sillyPadMsg';
-  action: SillyPadAction;
+  action: CreateOrRemove;
   x: number;
   y: number;
   ownerId: number;
+  expiresAtTick: number;
+}
+
+export type WallbreakerMsg = {
+  type: 'wallbreakerMsg';
+  action: CreateOrRemove;
+  x: number;
+  y: number;
+  startTick: number;
   expiresAtTick: number;
 }
 

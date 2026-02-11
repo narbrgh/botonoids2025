@@ -6,7 +6,7 @@ import Vector2 from './Vector2';
 import { resources } from './Resources';
 import TileMap from './TileMap';
 import Botonoid from './Botonoid';
-import type { PlayerSnapshotMsg, TileMapSnapshotMsg, TileChangeMsg , TileInitiateChangeMsg, TileChangeListMsg, SillyPadAction, SillyPadMsg} from './protocol'
+import type { PlayerSnapshotMsg, TileMapSnapshotMsg, TileChangeMsg , TileInitiateChangeMsg, TileChangeListMsg, CreateOrRemove, SillyPadMsg, WallbreakerMsg} from './protocol'
 import type { Phase , Role , Model } from './protocol';
 import {initLobbyUI, lobbyState } from "./lobby";
 
@@ -200,6 +200,10 @@ net.onSillyPadMsg = (m: SillyPadMsg) => {
   }
 
   if (tileMap) {tileMap.setSillyPadFromServerMessage(m, j)};
+}
+
+net.onWallbreakerMsg = (m: WallbreakerMsg) => {
+  console.log ("wallbreaker message received")
 }
 
 net.onConfig = (c) => {

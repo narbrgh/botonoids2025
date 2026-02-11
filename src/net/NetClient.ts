@@ -1,5 +1,5 @@
 import type { Command } from '../commands';
-import type { PlayerSnapshotMsg, TileMapSnapshotMsg, ConfigMsg, TileChangeMsg, TileInitiateChangeMsg, TileChangeListMsg, RoleInvalidMsg, SillyPadMsg, SillyPadAction} from '../protocol';
+import type { PlayerSnapshotMsg, TileMapSnapshotMsg, ConfigMsg, TileChangeMsg, TileInitiateChangeMsg, TileChangeListMsg, RoleInvalidMsg, SillyPadMsg, WallbreakerMsg} from '../protocol';
 
 type HelloMsg = { type: 'hello'; playerId: number; msg?: string };
 
@@ -27,6 +27,8 @@ export default class NetClient {
     { guard: this.isTileInitiateChangeMsg, handle: (m: TileInitiateChangeMsg) => { this.onTileInitiateChange?.(m); } },
     { guard: this.isRoleInvalidMsg,  handle: (m: RoleInvalidMsg) => { this.onRoleInvalid?.(m); } },
     { guard: this.isSillyPadMsg, handle: (m: SillyPadMsg) => {this.onSillyPadMsg?.(m); } },
+    { guard: this.isWallbreakerMsg, handle: (m: WallbreakerMsg) => {this.onWallbreakerMsg?.(m); } },
+
   ];
 
 
@@ -93,6 +95,19 @@ export default class NetClient {
       ((x as any).action === 'create' || (x as any).action === 'remove') &&
       typeof (x as any).x === 'number' &&
       typeof (x as any).ownerId === 'number' &&
+      typeof (x as any).expiresAtTick === 'number' 
+    );
+  }
+
+  private isWallbreakerMsg(x: unknown): x is WallbreakerMsg {
+    return (
+      typeof x === 'object' &&
+      x != null &&
+      (x as any).type === 'wallbreakerMsg' &&
+      typeof (x as any).action === 'string' &&
+      ((x as any).action === 'create' || (x as any).action === 'remove') &&
+      typeof (x as any).x === 'number' &&
+      typeof (x as any).startTick === 'number' &&
       typeof (x as any).expiresAtTick === 'number' 
     );
   }
@@ -164,6 +179,7 @@ export default class NetClient {
   onTileInitiateChange?: (m: TileInitiateChangeMsg) => void;
   onRoleInvalid?: (m: RoleInvalidMsg) => void;  
   onSillyPadMsg?: (m: SillyPadMsg) => void;
+  onWallbreakerMsg?: (m: WallbreakerMsg) => void;
 
   sendCommand(cmd: Command) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;

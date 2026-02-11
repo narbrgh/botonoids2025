@@ -10,7 +10,8 @@ const (
 	ColorChangeTicks     = 35
 	CooldownTicks        = 45
 	SillyPadTicks        = 65 * TickHz //65 seconds * TickHz
-	WorldCols            = 30          // temporary bounds for now (TODO update this later)
+	WallbreakerTicks     = 3 * TickHz
+	WorldCols            = 30 // temporary bounds for now (TODO update this later)
 	WorldRows            = 16
 	SpawnBaseX           = 6
 	SpawnBaseY           = 3

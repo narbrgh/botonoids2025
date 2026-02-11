@@ -6,7 +6,7 @@ type Phase string
 type Role string
 type Model string
 type ItemType string
-type SillyPadAction string
+type CreateOrRemove string
 
 const (
 	Up    DirType = "up"
@@ -53,8 +53,8 @@ const (
 )
 
 const (
-	SillyPadCreate SillyPadAction = "create"
-	SillyPadRemove SillyPadAction = "remove"
+	ItemCreate CreateOrRemove = "create"
+	ItemRemove CreateOrRemove = "remove"
 )
 
 func makeConfig() ConfigMsg {

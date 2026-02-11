@@ -103,6 +103,9 @@ func (r *Room) startCountdown() {
 		p.X = positions[i].X
 		p.Y = positions[i].Y
 		i++
+
+		//now reset data for each player
+		p.ResetData()
 	}
 
 	r.Phase = PhaseCountdown

@@ -191,10 +191,9 @@ func TileMapInitiateColorChange(tm *TileMap, x, y int, index uint8, startTick ui
 }
 
 func (tm *TileMap) CreateSillyPad(x, y int, playerId int, startTick uint64, numTicks uint64) bool {
-	//Note! Placing a SillyPad will over-write the previous SillyPad.
-	//This means a player can "refresh" their silly pads
-	//This also means that if two players are on the same square, and one player places one,
-	//the other player can then place one to "over-write" their opponent's silly pad!
+	//Note! Placing a SillyPad will over-write the previous SillyPad, IF it's someone else's silly pad
+	// You can't "refresh" your own silly pads until they expire
+
 	if !tm.InBounds(x, y) {
 		return false
 	}
@@ -204,6 +203,11 @@ func (tm *TileMap) CreateSillyPad(x, y int, playerId int, startTick uint64, numT
 		//this will prevent "collisions" where two silly pads are made concurrently, and then the order that each
 		//client receives the silly pad message would determine (non-deterministically) which player's silly pad "sticks"
 
+		return false
+	}
+
+	if tm.SillyPads[y][x].Active && tm.SillyPads[y][x].OwnerId == playerId {
+		//you can't refresh your own silly pad until it expires
 		return false
 	}
 

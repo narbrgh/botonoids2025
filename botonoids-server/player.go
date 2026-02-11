@@ -188,12 +188,17 @@ func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
 		switch p.SelectedItem {
 		case ItemSillyPad:
 			if p.NumSillyPadsLeft > 0 {
-				if room.Map.CreateSillyPad(p.X, p.Y, p.ID, room.Tick, SillyPadTicks) {
+				sillyPadX := p.X
+				sillyPadY := p.Y
+				if p.Moving {
+					sillyPadX, sillyPadY = p.GetTilePosWhileMoving(room.Tick)
+				}
+				if room.Map.CreateSillyPad(sillyPadX, sillyPadY, p.ID, room.Tick, SillyPadTicks) {
 					//silly pad created
 					p.NumSillyPadsLeft--
 
 					//now send a message
-					msg := SillyPadMsg{Type: "sillyPadMsg", Action: "create", X: p.X, Y: p.Y, OwnerId: p.ID, ExpiresAtTick: room.Tick + SillyPadTicks}
+					msg := SillyPadMsg{Type: "sillyPadMsg", Action: "create", X: sillyPadX, Y: sillyPadY, OwnerId: p.ID, ExpiresAtTick: room.Tick + SillyPadTicks}
 					if b, err := json.Marshal(msg); err == nil {
 						broadcast(room, b)
 					}
@@ -250,6 +255,29 @@ func (pl *PlayerState) EnterCooldown(currentTick uint64) {
 	pl.CooldownDurTicks = CooldownTicks
 }
 
+func (pl *PlayerState) GetTilePosWhileMoving(currentTick uint64) (X int, Y int) {
+	//while walking, the tile position is not updated until the end of the move. However, when doing "tasks" such as
+	//placing silly pads, this looks silly (if you are 1 pixel away from finishing the move, the silly pad will
+	// still show up on the old tile). This function returns pl.X, pl.Y if < 50% of the walk is done; otherwise it returns
+	// pl.Nx, Pl.Ny
+
+	if !pl.Moving {
+		return pl.X, pl.Y
+	}
+
+	if pl.MoveDurTicks == 0 || currentTick <= pl.MoveStartTick {
+		return pl.X, pl.Y
+	}
+
+	elapsed := currentTick - pl.MoveStartTick
+	if elapsed*2 < pl.MoveDurTicks {
+		return pl.X, pl.Y
+	}
+
+	return pl.ToX, pl.ToY
+
+}
+
 func (pl *PlayerState) SetSpecialTilesBasedOnRole() {
 	switch pl.SelectedRole {
 	case RoleGoldBot:
@@ -269,5 +297,17 @@ func (pl *PlayerState) SetSpecialTilesBasedOnRole() {
 		pl.WallIndex = 15
 		pl.GardenIndex = 16
 	}
+
+}
+
+func (pl *PlayerState) ResetData() { // resets for the beginning of the next game
+	pl.ActionPressed = false
+	pl.Moving = false
+	pl.Facing = Down
+	pl.Mode = Walking
+	pl.NumSillyPadsLeft = DEFAULT_SILLY_PADS
+	pl.NumWallbreakersLeft = DEFAULT_WALLBREAKERS
+	pl.Score = 0
+	pl.SelectedItem = ItemSillyPad
 
 }

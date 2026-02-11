@@ -64,7 +64,8 @@ func CheckForWallBuild(room *Room, p *PlayerState) {
 			// TODO add foundation index, wallindex, and garden index
 			gardenResult, numFoundationsDestroyed := room.Map.CheckForGarden(p.X, p.Y, p.FoundationIndex, p.WallIndex, p.GardenIndex, p.ID)
 			if gardenResult == true {
-				numFoundationsDestroyed++
+				//numFoundationsDestroyed++
+				p.NumWallsLeft -= numFoundationsDestroyed
 			}
 
 			if p.NumWallsLeft <= 0 {
@@ -145,8 +146,8 @@ func runGameLoop(room *Room) {
 						NumWallsLeft:        0,
 						Score:               0,
 						SelectedItem:        ItemSillyPad,
-						NumWallbreakersLeft: 1,
-						NumSillyPadsLeft:    10,
+						NumWallbreakersLeft: DEFAULT_WALLBREAKERS,
+						NumSillyPadsLeft:    DEFAULT_SILLY_PADS,
 						FoundationIndex:     5,
 						WallIndex:           6,
 						GardenIndex:         7,

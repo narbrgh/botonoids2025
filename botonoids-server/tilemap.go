@@ -252,8 +252,7 @@ func (tm *TileMap) CountEdgesHit() int {
 
 	return c
 }
-
-func (tm *TileMap) CheckForGarden(x, y int, foundationIndex uint8, wallIndex uint8, gardenIndex uint8, ID int) (bool, int) { // returns true if garden; returns number of foundation tiles destroyed as the int
+func (tm *TileMap) CheckForGarden(x, y int, foundationIndex uint8, wallIndex uint8, gardenIndex uint8, ID int) (gardenResult bool, numFoundationsDestroyed int, numGardensBuilt int) { // returns true if garden; returns number of foundation tiles destroyed as the first int
 	//this will check left, up, down, and right to see if a garden can be made at each
 	//first reset the "temp" map
 	tm.ResetTempRegionAndGardenTileMap()
@@ -317,7 +316,8 @@ func (tm *TileMap) CheckForGarden(x, y int, foundationIndex uint8, wallIndex uin
 		}
 	}
 
-	numFoundationsDestroyed := 0
+	numFoundationsDestroyed = 0
+	numGardensBuilt = 0
 
 	if madeGarden {
 
@@ -329,12 +329,13 @@ func (tm *TileMap) CheckForGarden(x, y int, foundationIndex uint8, wallIndex uin
 					}
 					tm.Tiles[yC][xC].Index = gardenIndex
 					tm.AddChange(xC, yC, gardenIndex)
+					numGardensBuilt++
 				}
 			}
 		}
 	}
 
-	return madeGarden, numFoundationsDestroyed
+	return madeGarden, numFoundationsDestroyed, numGardensBuilt
 }
 
 func (tm *TileMap) GardenFloodFill(x, y int, wallIndex uint8) {

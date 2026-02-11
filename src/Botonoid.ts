@@ -313,6 +313,10 @@ export default class Botonoid {
     return 40
   }
 
+  getScore(): number {
+    return this.score
+  }
+
   private handleAction(): void {
     console.log("handleAction");
 

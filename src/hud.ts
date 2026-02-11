@@ -5,6 +5,7 @@ import {Sprite} from "./Sprite"
 import { resources } from "./Resources";
 import Vector2 from "./Vector2"
 import type { Role , ItemType } from "./protocol"
+import { X_DRAW_OFFSET } from "./Constants";
 
 const PLAYER_CARD_WIDTH = 120
 const PLAYER_CARD_HEIGHT = 44
@@ -45,8 +46,90 @@ export default class HUD {
 
         //In order, from left to right, it will draw score bars, then player cards, then time left
 
-        //Score bars:
 
+
+        //Score bars: 
+  
+        // for purposes of visibility, will always draw in the order silver, gold, black, white
+        //from top to bottom
+        const roleRank: Record<string, number> = {
+            silverBot: 0,
+            goldBot: 1,
+            blackBot: 2,
+            whiteBot: 3,
+        };
+
+        let maxScore = 0
+
+        const sortedBots = [...botsById.values()]
+        .filter((bot) => bot.getRole() !== "observer")
+        .sort((a, b) => {
+            const aRank = roleRank[a.getRole()] ?? Number.MAX_SAFE_INTEGER;
+            const bRank = roleRank[b.getRole()] ?? Number.MAX_SAFE_INTEGER;
+
+            if (a.getScore() > maxScore) {maxScore = a.getScore()}
+            if (b.getScore() > maxScore) {maxScore = b.getScore()}
+
+            if (aRank !== bRank) return aRank - bRank;
+            return a.getId() - b.getId(); // tiebreaker
+        });
+
+        let barHeight = 15
+        let y1 = y + height/2
+        this.ctx.font =  '400 20px "Goldman"';
+
+
+        if (numActivePlayers == 1) {
+            barHeight = 15
+            y1 = y + height/2 - barHeight / 2
+            this.ctx.font =  '400 20px "Goldman"';
+
+        } else if (numActivePlayers == 2) {
+            barHeight = 15
+            y1 = y + height/2 - barHeight
+            this.ctx.font =  '400 20px "Goldman"';
+
+        } else if (numActivePlayers == 3) {
+            barHeight = 12
+            y1 = y + height/2 - barHeight - barHeight / 2
+            this.ctx.font =  '400 15px "Goldman"';
+        } else {
+            barHeight = 11
+            y1 = y + height/2 - (barHeight*2)
+            this.ctx.font =  '400 13px "Goldman"';
+        }
+
+        for (const bot of sortedBots) {
+            let w = 1.0
+
+            if (maxScore != 0) {w = bot.getScore() / maxScore}
+
+            const drawWidth = 100
+
+            const {color, color2} = this.getColors(bot.getRole())
+
+            this.ctx.fillStyle = color
+            this.ctx.strokeStyle = color2
+            this.ctx.lineWidth = 2
+
+            this.ctx.fillRect(x+X_DRAW_OFFSET+13, y1+1, w*drawWidth, barHeight-2)
+            this.ctx.strokeRect(x+X_DRAW_OFFSET+13, y1+1, w*drawWidth, barHeight-2)
+
+            this.ctx.textBaseline = 'middle';
+            this.ctx.textAlign = "left";
+
+            this.ctx.lineWidth = 3;
+            this.ctx.fillStyle = '#ffffff';
+            this.ctx.strokeStyle = "#000000"
+
+            this.ctx.strokeText(String(bot.getScore()), x+X_DRAW_OFFSET+13+(w*drawWidth)+15, y1+barHeight/2);
+            this.ctx.fillText(String(bot.getScore()), x+X_DRAW_OFFSET+13+(w*drawWidth)+15, y1+barHeight/2);        
+
+            
+            y1 += barHeight
+
+        }
+        
 
         //current-player interface
         const me = botsById.get(localPlayerId ?? -1)
@@ -57,6 +140,7 @@ export default class HUD {
             this.drawPlayerCardsFromObserverPerspective(x, y, width, height, botsById, numActivePlayers);
         } else {
             //this.drawPlayerCardsFromPlayerPerspective(me);
+            //Currently this is not implemented, but eventually the HUD will look slightly different for players vs observers
             this.drawPlayerCardsFromObserverPerspective(x, y, width, height, botsById, numActivePlayers);
         }
 
@@ -94,6 +178,32 @@ export default class HUD {
         }
     }   
 
+  
+
+    private getColors(r: Role): {color: string, color2: string} {
+        switch (r) {
+            case "goldBot": {
+                return {color: "rgb(166, 164, 54)", color2: "#915252"}
+                break;
+            }
+            case "blackBot": {
+                return {color: "rgb(0, 0, 0)", color2: "#5cadf4"}
+                break;
+            }
+            case "whiteBot": {
+                return {color: "rgb(255, 255, 255)", color2: "#ff0000"}
+                break;
+            }
+            case "silverBot": {
+                return {color: "rgb(135, 135, 135)", color2: "#b77736"}                
+                break;
+            } 
+            default: {
+                return {color: "rgb(144, 19, 19)", color2: "#ffffff"}
+            } 
+        }
+    }
+
     // Small player info card is what is drawn for observer mode for all players, 
     // and is drawn for all the "other" players in player mode
     private drawPlayerInfoCardSmall(x: number, y: number, width: number, height: number, bot: Botonoid) {
@@ -113,31 +223,8 @@ export default class HUD {
         const unoccupiedWidth: number = width - occupiedWidth;
         const whiteSpace = unoccupiedWidth / 4;
 
-        let color = "rgb(144, 19, 19)"
-        let color2 = "#ffffff"
-
-        switch (bot.getRole()) {
-            case "goldBot": {
-                color = "rgb(166, 164, 54)"
-                color2 = "#915252"
-                break;
-            }
-            case "blackBot": {
-                color = "rgb(0, 0, 0)"
-                color2 = "#5cadf4"
-                break;
-            }
-            case "whiteBot": {
-                color = "rgb(255, 255, 255)"
-                color2 = "#ff0000"
-                break;
-            }
-            case "silverBot": {
-                color = "rgb(135, 135, 135)"
-                color2 = "#b77736"
-                break;
-            }   
-        }
+        
+        const {color, color2} = this.getColors(bot.getRole())
 
 
         this.ctx.strokeStyle = color

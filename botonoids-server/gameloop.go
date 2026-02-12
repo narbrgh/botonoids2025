@@ -304,15 +304,26 @@ func runGameLoop(room *Room) {
 
 		// 6) Updaters. (tile, player, etc)
 		room.UpdatePhase()
-		sillyPadRemoved, expired := room.Map.Update(room.Tick)
+		sillyPadRemoved, expiredSillyPads, tileChanged := room.Map.Update(room.Tick)
+
 		if sillyPadRemoved {
-			for _, p := range expired {
+			for _, p := range expiredSillyPads {
 				//now send a message
 				msg := SillyPadMsg{Type: "sillyPadMsg", Action: "remove", X: p.X, Y: p.Y}
 				if b, err := json.Marshal(msg); err == nil {
 					broadcast(room, b)
 				}
 			}
+		}
+
+		if tileChanged {
+			// send a message (this will broadcast the wall destroyed
+			msg := TileChangeListMsg{Type: "tileChangeList", TileChangeList: room.Map.pending}
+			if b, err := json.Marshal(msg); err == nil {
+				broadcast(room, b)
+			}
+			room.Map.ResetChangeMap()
+			tileChanged = false
 		}
 
 		for _, p := range room.Players {

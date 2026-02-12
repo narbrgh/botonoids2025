@@ -21,7 +21,7 @@ const (
 	MinimumCombo         = 6
 	MaxNumColorChanges   = 5
 	DEFAULT_SILLY_PADS   = 10
-	DEFAULT_WALLBREAKERS = 1
+	DEFAULT_WALLBREAKERS = 100
 	PointsPerWall        = 1
 	PointsPerGarden      = 2
 )

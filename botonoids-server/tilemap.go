@@ -30,6 +30,11 @@ type Wallbreaker struct {
 	ExpiresAtTick uint64 `json:"expiresAtTick"`
 }
 
+type RevertGardenToColor struct {
+	active bool   `json:"-"`
+	tick   uint64 `json:"-"`
+}
+
 type TileMap struct {
 	Cols        int               `json:"cols"`
 	Rows        int               `json:"rows"`
@@ -56,7 +61,12 @@ type TileMap struct {
 	// gardenTileMap are the actual tiles that become garden
 	gardenTileMap [][]bool `json:"-"`
 
+	//slice to store wallbreakers
 	Wallbreakers []Wallbreaker `json:"wallbreakers"`
+
+	// BFS: Breadth-first search. A floodfill that creates that "wave" outward for gardens to revert to tiles
+	tempBFSMap          [][]int                 `json:"-"`
+	revertGardenToColor [][]RevertGardenToColor `json:"-"`
 }
 
 type TileDelta struct { //TileDelta is used for the multiple-tile-change-broadcast (such as combos and walls)
@@ -81,6 +91,8 @@ func NewTileMap(cols, rows int, seed int64) *TileMap {
 	region := make([][]bool, rows)
 	sillyPads := make([][]SillyPadState, rows)
 	wallbreakers := make([]Wallbreaker, 0)
+	tempBFSMap := make([][]int, rows)
+	revertGardenToColor := make([][]RevertGardenToColor, rows)
 
 	for y := 0; y < rows; y++ {
 		t[y] = make([]Tile, cols)
@@ -88,6 +100,8 @@ func NewTileMap(cols, rows int, seed int64) *TileMap {
 		garden[y] = make([]bool, cols)
 		region[y] = make([]bool, cols)
 		sillyPads[y] = make([]SillyPadState, cols)
+		tempBFSMap[y] = make([]int, cols)
+		revertGardenToColor[y] = make([]RevertGardenToColor, cols)
 
 		for x := 0; x < cols; x++ {
 			t[y][x].Index = uint8(rng.Intn(NumColors))
@@ -104,9 +118,14 @@ func NewTileMap(cols, rows int, seed int64) *TileMap {
 			//variables for checking for garden
 			garden[y][x] = false
 			region[y][x] = false
+
+			//variables for BFS map (de-gardening)
+			tempBFSMap[y][x] = -1
+			revertGardenToColor[y][x].active = false
+			revertGardenToColor[y][x].tick = 0
 		}
 	}
-	return &TileMap{Cols: cols, Rows: rows, Tiles: t, tempTileMap: temp, gardenTileMap: garden, regionTileMap: region, SillyPads: sillyPads, Wallbreakers: wallbreakers, rng: rng}
+	return &TileMap{Cols: cols, Rows: rows, Tiles: t, tempTileMap: temp, gardenTileMap: garden, regionTileMap: region, SillyPads: sillyPads, Wallbreakers: wallbreakers, tempBFSMap: tempBFSMap, revertGardenToColor: revertGardenToColor, rng: rng}
 }
 
 func (tm *TileMap) SetTile(x, y int, index uint8) bool {
@@ -153,8 +172,12 @@ func IsTileAFoundationWallOrFlower(i uint8) bool {
 	return false
 }
 
-func IsTileAWall(i uint8) bool {
+func (tm *TileMap) IsTileAWall(i uint8) bool {
 	return i == 6 || i == 9 || i == 12 || i == 15
+}
+
+func (tm *TileMap) IsTileAGarden(i uint8) bool {
+	return i == 7 || i == 10 || i == 13 || i == 16
 }
 
 func isTileGardenable(i uint8) bool {
@@ -381,7 +404,7 @@ func (tm *TileMap) GardenFloodFill(x, y int, wallIndex uint8) {
 
 	i, ok := tm.GetTileIndex(x, y) //check for walls, friendly or not
 	if ok {
-		if IsTileAWall(i) {
+		if tm.IsTileAWall(i) {
 			if i == wallIndex {
 				return
 			}
@@ -413,6 +436,14 @@ func (tm *TileMap) ResetTempTileMap() {
 	for y := range tm.tempTileMap {
 		for x := range tm.tempTileMap[y] {
 			tm.tempTileMap[y][x] = false
+		}
+	}
+}
+
+func (tm *TileMap) ResetTempBFSMap() {
+	for y := range tm.tempTileMap {
+		for x := range tm.tempTileMap[y] {
+			tm.tempBFSMap[y][x] = -1
 		}
 	}
 }
@@ -470,10 +501,34 @@ func (tm *TileMap) InBounds(x, y int) bool {
 	return true
 }
 
-func (tm *TileMap) Update(currentTick uint64) (bool, []SillyPadPos) {
+func (tm *TileMap) ExplodeWall(x, y int) bool {
+	if !tm.InBounds(x, y) {
+		return false
+	}
 
-	returnValue := false
-	expired := make([]SillyPadPos, 0, 8)
+	if !tm.IsTileAWall(tm.Tiles[y][x].Index) {
+		return false
+	}
+
+	//It was indeed a wall: change it to a random tile, and return true so that main knows that a tilechange was added
+	r := uint8(tm.rng.Intn(NumColors))
+	tm.SetTile(x, y, r)
+	tm.AddChange(x, y, r)
+
+	//now start the breadth-first search (BFS), a floodfill that also has distance
+	tm.ResetTempBFSMap()
+	tm.revertGardenToColor[y][x].active = false
+
+	//tm.BFSAlgo()
+
+	return true
+}
+
+func (tm *TileMap) Update(currentTick uint64) (sillyPadExpired bool, expiredSillyPads []SillyPadPos, tileChange bool) {
+
+	sillyPadExpired = false
+	expiredSillyPads = make([]SillyPadPos, 0, 8)
+	tileChange = false
 
 	for x := 0; x < tm.Cols; x++ {
 		for y := 0; y < tm.Rows; y++ {
@@ -486,13 +541,29 @@ func (tm *TileMap) Update(currentTick uint64) (bool, []SillyPadPos) {
 			if tm.SillyPads[y][x].Active {
 				if currentTick >= tm.SillyPads[y][x].ExpiresAtTick {
 					tm.SillyPads[y][x].Active = false
-					returnValue = true // returns true if silly pad "times out" -- this way gameloop.go knows to send signal to client
-					expired = append(expired, SillyPadPos{X: x, Y: y})
+					sillyPadExpired = true // returns true if silly pad "times out" -- this way gameloop.go knows to send signal to client
+					expiredSillyPads = append(expiredSillyPads, SillyPadPos{X: x, Y: y})
 				}
 			}
 		}
 	}
-	return returnValue, expired
+
+	activeWb := tm.Wallbreakers[:0]
+	for _, wb := range tm.Wallbreakers {
+		if currentTick >= wb.ExpiresAtTick {
+			//expired; this one will start a wall-removal process, then continue the for loop
+			// so it isn't added to the "activeWb" slice
+			result := tm.ExplodeWall(wb.X, wb.Y)
+			tileChange = result || tileChange // if result is true, make tilechange true. but don't make tilechange false only by one false result
+
+			//TODO make an explosion "ghost" any players within 2 tiles of the explosion
+			continue
+		}
+		activeWb = append(activeWb, wb)
+	}
+	tm.Wallbreakers = activeWb
+
+	return sillyPadExpired, expiredSillyPads, tileChange
 }
 
 func (tm *TileMap) CheckMovement(nx int, ny int, id int, playerWallIndex uint8) bool {
@@ -500,7 +571,7 @@ func (tm *TileMap) CheckMovement(nx int, ny int, id int, playerWallIndex uint8) 
 		return false
 	}
 
-	if IsTileAWall(tm.Tiles[ny][nx].Index) {
+	if tm.IsTileAWall(tm.Tiles[ny][nx].Index) {
 		if tm.Tiles[ny][nx].Index != playerWallIndex {
 			return false
 		}

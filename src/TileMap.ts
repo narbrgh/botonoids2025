@@ -1,8 +1,8 @@
 import {Sprite} from './Sprite';
-import { NUMBER_OF_COLORS, SERVER_TICK_HZ, X_DRAW_OFFSET, Y_DRAW_OFFSET} from './Constants';
+import { BOMB_EXPLODE_TICKS, NUMBER_OF_COLORS, SERVER_TICK_HZ, X_DRAW_OFFSET, Y_DRAW_OFFSET} from './Constants';
 import Vector2 from './Vector2';
 import { mulberry32 } from './rng';
-import type { SnapshotTileMap, SnapshotTile, TileChangeListMsg, SillyPadMsg } from './protocol';
+import type { SnapshotTileMap, SnapshotTile, TileChangeListMsg, SillyPadMsg, WallbreakerMsg } from './protocol';
 
 export type ColorChangeResult =
   | 'colorChangeSuccessful'
@@ -23,6 +23,13 @@ type SillyPadState = {
     drawIndex: number;
 }
 
+type Wallbreaker = {
+    x: number;
+    y: number;
+    startTick: number;
+    expiresAtTick: number;
+}
+
 export interface TileActions {
   initiateColorChange(tilePos: Vector2): ColorChangeResult;
 }
@@ -35,8 +42,12 @@ export default class TileMap {
     private readonly tileCount: number = 5; 
     private tiles: Tile[][];
     private sillyPads: SillyPadState[][];
+
+    private wallbreakers: Wallbreaker[];
+
     private readonly tileSprite: Sprite;
     private readonly sillyPadSprite: Sprite;
+    private readonly wallbreakerSprite: Sprite;
 
     private readonly getEstimatedTick: (nowMs: number) => number;
 
@@ -46,6 +57,7 @@ export default class TileMap {
         tileSize: number;
         tileSprite: Sprite;
         sillyPadSprite: Sprite;
+        wallbreakerSprite: Sprite;
         getEstimatedTick: (nowMs: number) => number;
     }) {
         this.cols = opts.cols;
@@ -53,6 +65,7 @@ export default class TileMap {
         this.tileSize = opts.tileSize;
         this.tileSprite = opts.tileSprite;
         this.sillyPadSprite = opts.sillyPadSprite;
+        this.wallbreakerSprite = opts.wallbreakerSprite;
 
         this.getEstimatedTick = opts.getEstimatedTick;
 
@@ -60,6 +73,7 @@ export default class TileMap {
         this.randomizeBoard();
 
         this.sillyPads = this.initializeSillyPads();
+        this.wallbreakers = [];
 
     }
 
@@ -160,6 +174,22 @@ export default class TileMap {
         this.sillyPads[y][x].active = false
     }
 
+    sendWallbreakerServerMessage(m: WallbreakerMsg) {
+        if (m.action === "create") {
+            this.createWallbreaker(m.x, m.y, m.startTick, m.expiresAtTick)
+        } else {
+            this.removeWallbreaker(m.x, m.y)
+        }
+    }
+
+    createWallbreaker(x: number, y: number, startTick: number, expiresAtTick: number) {
+        this.wallbreakers.push({x, y, startTick, expiresAtTick})
+    }
+
+    removeWallbreaker(x: number, y: number) {
+        //TODO make explosion sound / effect
+    }
+
     rerollWithSeed(seed: number): void {
         this.tiles = this.generateRandomTilesFromSeed(seed);
     }
@@ -251,6 +281,25 @@ export default class TileMap {
         return tt
     }
 
+    //tint is used for wallbreakers turning red (then eventually flashing at the end)
+    private getTintAlpha(startTick: number, expiresAtTick: number, nowMs: number): number {
+
+        //note! last 0.1 seconds will be the last "yellow -> clear" flash. So Expiresattick is corrected to expiresattick-0.1.
+        const estTick = this.getEstimatedTick(nowMs)
+        const u = Math.max(0, Math.min(1, (estTick - startTick) / ((expiresAtTick-BOMB_EXPLODE_TICKS) - startTick))); // 0..1
+
+        //low pulse rate at spawn -> high pulse rate near explosion
+        const f0 = 1.5;
+        const f1 = 18.0;
+
+        const phase = 2 * Math.PI * (f0 * u + 0.5 * (f1 - f0) * u * u);
+        const pulse = 0.5 + 0.5 * Math.sin(phase);
+        const redness = 0.2 + 0.8 * pulse;
+
+        return redness
+
+    }
+
     draw(ctx: CanvasRenderingContext2D, nowMs: number): void {
         // if the underlying resource isn't loaded yet, Sprite.drawImage won't draw it
         for (let r = 0; r < this.rows; r++) {
@@ -278,11 +327,30 @@ export default class TileMap {
                 if (this.sillyPads[r][c].active) {
                     this.sillyPadSprite.frame = this.sillyPads[r][c].drawIndex
                     
-                    const alpha = this.getSillyPadAlpha(nowMs, this.sillyPads[r][c].expiresAtTick);
+                    const alpha = this.getSillyPadAlpha(nowMs, this.sillyPads[r][c].expiresAtTick); 
                     this.sillyPadSprite.drawImageWithOpacity(ctx,x,y, alpha)
                 }
 
+            } // next c
+        } // next r
+
+        //now draw wallbreakers
+        for (const wb of this.wallbreakers) {
+            const xD = wb.x * this.tileSize + X_DRAW_OFFSET;
+            const yD = wb.y * this.tileSize + Y_DRAW_OFFSET;
+
+            if (wb.expiresAtTick - BOMB_EXPLODE_TICKS > this.getEstimatedTick(nowMs)) { // if there is more than 0.1 seconds in the bomb's life
+                const tint = this.getTintAlpha(wb.startTick, wb.expiresAtTick, nowMs)
+                this.wallbreakerSprite.drawImageWithTint(ctx, xD, yD, "#ff00007c", tint, 1)
+            } else if (this.getEstimatedTick(nowMs) > wb.expiresAtTick) {
+                //Expired; do not draw
+            } else { // <= 0.1 seconds left!
+                const p = (wb.expiresAtTick - this.getEstimatedTick(nowMs))/BOMB_EXPLODE_TICKS // 0..1
+                const pp = 1-Math.max(0, Math.min(1, p));
+                this.wallbreakerSprite.drawImageWithTint(ctx, xD, yD, "#ffff00", pp*pp, 1)
+
             }
+
         }
     }
 

@@ -87,6 +87,15 @@ const sillyPadSprite = new Sprite({
   scale: TILE_SIZE / FRAME_SIZE, // keep this an integer for pixel art
 });
 
+const wallbreakerSprite = new Sprite({
+  resource: resources.images.items,
+  frameSize: new Vector2(FRAME_SIZE, FRAME_SIZE),
+  hFrames: 1,
+  vFrames: 4,
+  frame: 3,
+  scale: TILE_SIZE / FRAME_SIZE,
+})
+
 const clock = new ServerClock();
 let secondsLeft = 540;
 
@@ -204,6 +213,8 @@ net.onSillyPadMsg = (m: SillyPadMsg) => {
 
 net.onWallbreakerMsg = (m: WallbreakerMsg) => {
   console.log ("wallbreaker message received")
+
+  if (tileMap) {tileMap.sendWallbreakerServerMessage(m)};
 }
 
 net.onConfig = (c) => {
@@ -211,7 +222,7 @@ net.onConfig = (c) => {
   cols = c.cols;
   rows = c.rows;
 
-  tileMap = new TileMap({ cols, rows, tileSize, tileSprite, sillyPadSprite, getEstimatedTick });
+  tileMap = new TileMap({ cols, rows, tileSize, tileSprite, sillyPadSprite: sillyPadSprite, wallbreakerSprite: wallbreakerSprite, getEstimatedTick });
   tileMap.rerollWithSeed(c.seed);
 
   clock.updateConfig(c.tickHz);

@@ -77,6 +77,8 @@ export class Sprite {
   drawImageWithOpacity(ctx: CanvasRenderingContext2D, x: number, y: number, alpha: number): void {
     if (!this.resource.isLoaded) return;
 
+    ctx.save();
+
     const frame = this.frameMap.get(this.frame);
     const sx = frame?.x ?? 0;
     const sy = frame?.y ?? 0;
@@ -91,7 +93,45 @@ export class Sprite {
       x, y, fw * this.scale, fh * this.scale
     );
 
-    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  drawImageWithTint(ctx: CanvasRenderingContext2D, x: number, y: number, tintColor: string, tintAmount: number, alpha: number): void {
+    if (!this.resource.isLoaded) return;
+
+    ctx.save();
+
+    const c = document.createElement("canvas");
+
+    const frame = this.frameMap.get(this.frame);
+    const sx = frame?.x ?? 0;
+    const sy = frame?.y ?? 0;
+
+    const fw = this.frameSize.x;
+    const fh = this.frameSize.y;
+
+    c.width = fw*this.scale;
+    c.height = fh*this.scale;
+    const g = c.getContext("2d")!;
+    g.imageSmoothingEnabled = false;
+
+    g.globalAlpha = alpha
+
+    g.drawImage(
+      this.resource.image,
+      sx, sy, fw, fh,
+      0, 0, fw * this.scale, fh * this.scale
+    );
+
+    // 2) apply tint only where sprite pixels exist
+    g.globalCompositeOperation = "source-atop";
+    g.globalAlpha = tintAmount;
+    g.fillStyle = tintColor;
+    g.fillRect(0, 0, fw * this.scale, fh * this.scale);
+
+    ctx.drawImage(c, x, y);
+
+    ctx.restore();
   }
 }
 ``

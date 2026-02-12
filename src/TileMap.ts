@@ -2,7 +2,7 @@ import {Sprite} from './Sprite';
 import { BOMB_EXPLODE_TICKS, NUMBER_OF_COLORS, SERVER_TICK_HZ, X_DRAW_OFFSET, Y_DRAW_OFFSET} from './Constants';
 import Vector2 from './Vector2';
 import { mulberry32 } from './rng';
-import type { SnapshotTileMap, SnapshotTile, TileChangeListMsg, SillyPadMsg, WallbreakerMsg } from './protocol';
+import type { SnapshotTileMap, TileChangeListMsg, SillyPadMsg, WallbreakerMsg } from './protocol';
 
 export type ColorChangeResult =
   | 'colorChangeSuccessful'
@@ -30,6 +30,13 @@ type Wallbreaker = {
     expiresAtTick: number;
 }
 
+type Explosion = {
+    x: number;
+    y: number;
+    startTick: number;
+    durTicks: number;
+}
+
 export interface TileActions {
   initiateColorChange(tilePos: Vector2): ColorChangeResult;
 }
@@ -44,6 +51,7 @@ export default class TileMap {
     private sillyPads: SillyPadState[][];
 
     private wallbreakers: Wallbreaker[];
+    private explosions: Explosion[];
 
     private readonly tileSprite: Sprite;
     private readonly sillyPadSprite: Sprite;
@@ -74,6 +82,7 @@ export default class TileMap {
 
         this.sillyPads = this.initializeSillyPads();
         this.wallbreakers = [];
+        this.explosions = [];
 
     }
 
@@ -145,6 +154,8 @@ export default class TileMap {
     reroll(): void {
         this.tiles = this.generateRandomTiles();
         this.sillyPads = this.initializeSillyPads();
+        this.wallbreakers = [];
+        this.explosions = [];
     }
 
     setSillyPadFromServerMessage(m: SillyPadMsg, spriteIndex: number) {
@@ -183,11 +194,33 @@ export default class TileMap {
     }
 
     createWallbreaker(x: number, y: number, startTick: number, expiresAtTick: number) {
+        this.wallbreakers = this.wallbreakers.filter(wb => !(wb.x === x && wb.y === y));
         this.wallbreakers.push({x, y, startTick, expiresAtTick})
     }
 
     removeWallbreaker(x: number, y: number) {
-        //TODO make explosion sound / effect
+        let removed = false;
+        this.wallbreakers = this.wallbreakers.filter(wb => {
+            const hit = wb.x === x && wb.y === y;
+            if (hit) {
+                removed = true;
+            }
+            return !hit;
+        });
+
+        if (removed) {
+            this.startExplosion(x, y);
+        }
+    }
+
+    private startExplosion(x: number, y: number, startTickOverride?: number): void {
+        const nowTick = startTickOverride ?? this.getEstimatedTick(performance.now());
+        this.explosions.push({
+            x,
+            y,
+            startTick: nowTick,
+            durTicks: Math.max(4, Math.round(0.6 * SERVER_TICK_HZ)),
+        });
     }
 
     rerollWithSeed(seed: number): void {
@@ -300,6 +333,57 @@ export default class TileMap {
 
     }
 
+    private drawExplosion(ctx: CanvasRenderingContext2D, nowMs: number, e: Explosion): void {
+        const estTick = this.getEstimatedTick(nowMs);
+        const t = (estTick - e.startTick) / e.durTicks;
+        const u = Math.max(0, Math.min(1, t));
+
+        if (u <= 0 || u >= 1) {
+            return;
+        }
+
+        const centerX = e.x * this.tileSize + X_DRAW_OFFSET + this.tileSize / 2;
+        const centerY = e.y * this.tileSize + Y_DRAW_OFFSET + this.tileSize / 2;
+
+        const maxRadius = this.tileSize;
+        const radius = maxRadius * (0.15 + 0.85 * u);
+        const fade = 1 - u;
+
+        ctx.save();
+
+        // soft glow
+        const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
+        gradient.addColorStop(0.0, `rgba(255,255,200,${0.85 * fade})`);
+        gradient.addColorStop(0.4, `rgba(255,150,50,${0.65 * fade})`);
+        gradient.addColorStop(1.0, 'rgba(255,0,0,0)');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // expanding ring
+        ctx.strokeStyle = `rgba(255,230,130,${0.9 * fade})`;
+        ctx.lineWidth = Math.max(1, this.tileSize * 0.08 * fade);
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius * 0.9, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // sparks
+        ctx.strokeStyle = `rgba(255,235,160,${0.75 * fade})`;
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2 + u * 2.2;
+            const r0 = radius * 0.25;
+            const r1 = radius * 0.75;
+            ctx.beginPath();
+            ctx.moveTo(centerX + Math.cos(a) * r0, centerY + Math.sin(a) * r0);
+            ctx.lineTo(centerX + Math.cos(a) * r1, centerY + Math.sin(a) * r1);
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    }
+
     draw(ctx: CanvasRenderingContext2D, nowMs: number): void {
         // if the underlying resource isn't loaded yet, Sprite.drawImage won't draw it
         for (let r = 0; r < this.rows; r++) {
@@ -352,6 +436,10 @@ export default class TileMap {
             }
 
         }
+
+        for (const e of this.explosions) {
+            this.drawExplosion(ctx, nowMs, e);
+        }
     }
 
     update(nowMs: number): void {
@@ -368,6 +456,19 @@ export default class TileMap {
                 }
             }
         }
+
+        const tick = this.getEstimatedTick(nowMs);
+        const activeWallbreakers: Wallbreaker[] = [];
+        for (const wb of this.wallbreakers) {
+            if (tick >= wb.expiresAtTick) {
+                this.startExplosion(wb.x, wb.y, wb.expiresAtTick);
+                continue;
+            }
+            activeWallbreakers.push(wb);
+        }
+        this.wallbreakers = activeWallbreakers;
+
+        this.explosions = this.explosions.filter(e => (tick - e.startTick) <= e.durTicks);
     }
 
     setAuthoritativeStateFromTileMapSnapshot(s: SnapshotTileMap) {

@@ -345,8 +345,9 @@ export default class TileMap {
         const centerX = e.x * this.tileSize + X_DRAW_OFFSET + this.tileSize / 2;
         const centerY = e.y * this.tileSize + Y_DRAW_OFFSET + this.tileSize / 2;
 
-        const maxRadius = this.tileSize;
-        const radius = maxRadius * (0.15 + 0.85 * u);
+        // make the circular explosion significantly larger while keeping the same visual style
+        const maxRadius = this.tileSize * 2.2;
+        const radius = maxRadius * (0.2 + 0.8 * u);
         const fade = 1 - u;
 
         ctx.save();

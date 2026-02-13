@@ -665,9 +665,13 @@ func (tm *TileMap) Update(currentTick uint64) (sillyPadExpired bool, expiredSill
 	return sillyPadExpired, expiredSillyPads, tileChange, d, Explosions
 }
 
-func (tm *TileMap) CheckMovement(nx int, ny int, id int, playerWallIndex uint8) bool {
+func (tm *TileMap) CheckMovement(nx int, ny int, id int, playerWallIndex uint8, ghostMode bool) bool {
 	if !tm.InBounds(nx, ny) {
 		return false
+	}
+
+	if ghostMode {
+		return true
 	}
 
 	if tm.IsTileAWall(tm.Tiles[ny][nx].Index) {

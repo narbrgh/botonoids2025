@@ -131,8 +131,8 @@ func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
 			nx++
 		}
 
-		//bounds (temporary) TODO update this code, including "collision"
-		if !room.Map.CheckMovement(nx, ny, p.ID, p.WallIndex) {
+		//bounds
+		if !room.Map.CheckMovement(nx, ny, p.ID, p.WallIndex, p.Mode == Ghost) {
 			return
 		}
 

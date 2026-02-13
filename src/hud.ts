@@ -304,16 +304,17 @@ export default class HUD {
         this.itemsSprite.frame = 2
         this.itemsSprite.drawImage(this.ctx, dL[2].x, dL[2].y)
 
-        //if (bot.getGhostCountLeft(nowMs) > 0) {
-            this.ctx.font =  '400 19px "Goldman"';
+        if (bot.getGhostCountLeft(nowMs) > 0) {
+            this.ctx.font =  '400 20px "Goldman"';
+            this.ctx.textAlign = "center";
 
             this.ctx.lineWidth = 3;
             this.ctx.fillStyle = '#ffffff';
             this.ctx.strokeStyle = "#000000"
 
-            this.ctx.strokeText(String(bot.getGhostCountLeft(nowMs)), dL[2].x + 5, dL[2].y + spriteH / 2 + 4);
-            this.ctx.fillText(String(bot.getGhostCountLeft(nowMs)), dL[2].x+5, dL[2].y+spriteH/2+4);
-        //}
+            this.ctx.strokeText(String(bot.getGhostCountLeft(nowMs)), dL[2].x+spriteW/2, dL[2].y + spriteH / 2 + 4);
+            this.ctx.fillText(String(bot.getGhostCountLeft(nowMs)), dL[2].x+spriteW/2, dL[2].y+spriteH/2+4);
+        }
     }
        
 }

@@ -291,7 +291,7 @@ func runGameLoop(room *Room) {
 			}
 
 			// bounds/collision check here; if blocked, do not start move
-			if !room.Map.CheckMovement(nx, ny, p.ID, p.WallIndex) {
+			if !room.Map.CheckMovement(nx, ny, p.ID, p.WallIndex, p.Mode == Ghost) {
 				continue
 			}
 

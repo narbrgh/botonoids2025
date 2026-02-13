@@ -314,12 +314,15 @@ export default class Botonoid {
     return this.numWallbreakersLeft
   }
 
-  getGhostCountLeft(): number {
+  getGhostCountLeft(nowMs: number): number {
     if (this.getMode() != "ghost") {return 0}
 
-    return (tick - this.cooldownStartTick)*SERVER_TICK_HZ
+    var currentTick = this.getEstimatedTick(nowMs)
 
-    return 1
+    return Math.max(
+      0,
+      Math.ceil(((this.cooldownStartTick + this.cooldownDurTicks) - currentTick) / SERVER_TICK_HZ)
+      );
   }
 
   getScore(): number {

@@ -47,11 +47,6 @@ export default class HUD {
         //draw background, text, etc
         const { x, y, width, height, timeLeft, botsById, localPlayerId, numActivePlayers, nowMs } = opts;
 
-
-        // first calculate currentTick
-        currentTick := 0
-
-
         //In order, from left to right, it will draw score bars, then player cards, then time left
 
 
@@ -143,13 +138,13 @@ export default class HUD {
         const me = botsById.get(localPlayerId ?? -1)
 
         if (!me) {
-            this.drawPlayerCardsFromObserverPerspective(x, y, width, height, botsById, numActivePlayers, currentTick);
+            this.drawPlayerCardsFromObserverPerspective(x, y, width, height, botsById, numActivePlayers, nowMs);
         }else if (me.getRole() === "observer") {
-            this.drawPlayerCardsFromObserverPerspective(x, y, width, height, botsById, numActivePlayers, currentTick);
+            this.drawPlayerCardsFromObserverPerspective(x, y, width, height, botsById, numActivePlayers, nowMs);
         } else {
             //this.drawPlayerCardsFromPlayerPerspective(me);
             //Currently this is not implemented, but eventually the HUD will look slightly different for players vs observers
-            this.drawPlayerCardsFromObserverPerspective(x, y, width, height, botsById, numActivePlayers, currentTick);
+            this.drawPlayerCardsFromObserverPerspective(x, y, width, height, botsById, numActivePlayers, nowMs);
         }
 
         // Time left
@@ -214,7 +209,7 @@ export default class HUD {
 
     // Small player info card is what is drawn for observer mode for all players, 
     // and is drawn for all the "other" players in player mode
-    private drawPlayerInfoCardSmall(x: number, y: number, width: number, height: number, bot: Botonoid, currentTick: number) {
+    private drawPlayerInfoCardSmall(x: number, y: number, width: number, height: number, bot: Botonoid, nowMs: number) {
         
         //first some calculations. if there is a box like this:
         // ---------------------
@@ -309,16 +304,16 @@ export default class HUD {
         this.itemsSprite.frame = 2
         this.itemsSprite.drawImage(this.ctx, dL[2].x, dL[2].y)
 
-        if (bot.getGhostCountLeft(currentTick) > 0) {
+        //if (bot.getGhostCountLeft(nowMs) > 0) {
             this.ctx.font =  '400 19px "Goldman"';
 
             this.ctx.lineWidth = 3;
             this.ctx.fillStyle = '#ffffff';
             this.ctx.strokeStyle = "#000000"
 
-            this.ctx.strokeText(String(bot.getGhostCountLeft(currentTick)), dL[2].x + 5, dL[2].y + spriteH / 2 + 4);
-            this.ctx.fillText(String(bot.getGhostCountLeft(currentTick)), dL[2].x+5, dL[2].y+spriteH/2+4);
-        }
+            this.ctx.strokeText(String(bot.getGhostCountLeft(nowMs)), dL[2].x + 5, dL[2].y + spriteH / 2 + 4);
+            this.ctx.fillText(String(bot.getGhostCountLeft(nowMs)), dL[2].x+5, dL[2].y+spriteH/2+4);
+        //}
     }
        
 }

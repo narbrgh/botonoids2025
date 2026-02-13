@@ -231,7 +231,12 @@ export default class Botonoid {
     if (this.role === "observer") {return;} // don't draw observers
 
     const p = this.getDrawPx(nowMs);
-    this.sprite.drawImage(ctx, p.x, p.y);
+
+    if (this.mode === 'ghost') {
+      this.sprite.drawImageWithOpacity(ctx, p.x, p.y, 0.5)
+    } else {
+      this.sprite.drawImage(ctx, p.x, p.y);
+    }
 
     //draw numColorChanges above the head if not 0
     if (this.numColorChangesLeft > 0) {
@@ -310,7 +315,11 @@ export default class Botonoid {
   }
 
   getGhostCountLeft(): number {
-    return 40
+    if (this.getMode() != "ghost") {return 0}
+
+    return (tick - this.cooldownStartTick)*SERVER_TICK_HZ
+
+    return 1
   }
 
   getScore(): number {

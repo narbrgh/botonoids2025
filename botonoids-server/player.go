@@ -185,6 +185,10 @@ func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
 			p.SelectedItem = ItemSillyPad
 		}
 	case "useItem":
+		if p.Mode == Ghost { //don't let ghosts use items
+			break
+		}
+
 		switch p.SelectedItem {
 		case ItemSillyPad:
 			if p.NumSillyPadsLeft > 0 {
@@ -208,7 +212,7 @@ func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
 			nx := p.X
 			ny := p.Y
 
-			if p.NumWallbreakersLeft > 0 {
+			if p.NumWallbreakersLeft > 0 && !p.Moving {
 				switch p.Facing {
 				case Up:
 					ny--
@@ -230,6 +234,9 @@ func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
 					}
 				}
 			}
+		case ItemGhost:
+			p.SetGhost(room.Tick)
+
 		}
 
 	case "input":
@@ -262,6 +269,11 @@ func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
 
 func (pl *PlayerState) Update(currentTick uint64) {
 	if pl.Mode == Cooldown {
+		if currentTick-pl.CooldownStartTick >= pl.CooldownDurTicks {
+			pl.Mode = Walking
+		}
+	}
+	if pl.Mode == Ghost {
 		if currentTick-pl.CooldownStartTick >= pl.CooldownDurTicks {
 			pl.Mode = Walking
 		}
@@ -324,6 +336,28 @@ func (pl *PlayerState) SetSpecialTilesBasedOnRole() {
 		pl.GardenIndex = 16
 	}
 
+}
+
+func (pl *PlayerState) UpdateScore(d DestroyedTiles) {
+	switch pl.SelectedRole {
+	case RoleSilverBot:
+		pl.Score -= d.Silver.Walls*PointsPerWall + d.Silver.Gardens*PointsPerGarden
+	case RoleGoldBot:
+		pl.Score -= d.Gold.Walls*PointsPerWall + d.Gold.Gardens*PointsPerGarden
+	case RoleWhiteBot:
+		pl.Score -= d.White.Walls*PointsPerWall + d.White.Gardens*PointsPerGarden
+	case RoleBlackBot:
+		pl.Score -= d.Black.Walls*PointsPerWall + d.Black.Gardens*PointsPerGarden
+	}
+}
+
+func (pl *PlayerState) SetGhost(currentTick uint64) {
+	pl.Mode = Ghost
+	pl.NumColorChangesLeft = 0
+	pl.NumWallsLeft = 0
+	pl.CooldownStartTick = currentTick
+	pl.CooldownDurTicks = GhostTicks
+	// TODO reset foundations
 }
 
 func (pl *PlayerState) ResetData() { // resets for the beginning of the next game

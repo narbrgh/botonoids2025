@@ -35,6 +35,23 @@ type RevertGardenToColor struct {
 	tick   uint64 `json:"-"`
 }
 
+type DestroyedPair struct {
+	Walls   int
+	Gardens int
+}
+
+type DestroyedTiles struct {
+	Gold   DestroyedPair
+	Silver DestroyedPair
+	White  DestroyedPair
+	Black  DestroyedPair
+}
+
+type ExplosionEvent struct {
+	X int
+	Y int
+}
+
 type TileMap struct {
 	Cols        int               `json:"cols"`
 	Rows        int               `json:"rows"`
@@ -501,16 +518,18 @@ func (tm *TileMap) InBounds(x, y int) bool {
 	return true
 }
 
-func (tm *TileMap) ExplodeWall(x, y int) bool {
+func (tm *TileMap) ExplodeWall(x, y int, currentTick uint64) uint8 {
 	if !tm.InBounds(x, y) {
-		return false
+		return 0
 	}
 
 	if !tm.IsTileAWall(tm.Tiles[y][x].Index) {
-		return false
+		return 0
 	}
 
 	//It was indeed a wall: change it to a random tile, and return true so that main knows that a tilechange was added
+	destroyedTileIndex := tm.Tiles[y][x].Index
+
 	r := uint8(tm.rng.Intn(NumColors))
 	tm.SetTile(x, y, r)
 	tm.AddChange(x, y, r)
@@ -518,17 +537,57 @@ func (tm *TileMap) ExplodeWall(x, y int) bool {
 	//now start the breadth-first search (BFS), a floodfill that also has distance
 	tm.ResetTempBFSMap()
 	tm.revertGardenToColor[y][x].active = false
+	tm.tempBFSMap[y][x] = 0 // -1 means not checked; 0 means checked but not garden
 
-	//tm.BFSAlgo()
+	tm.breadthFirstAlgo(x+1, y, x, y, currentTick)
+	tm.breadthFirstAlgo(x-1, y, x, y, currentTick)
+	tm.breadthFirstAlgo(x, y+1, x, y, currentTick)
+	tm.breadthFirstAlgo(x, y-1, x, y, currentTick)
 
-	return true
+	return destroyedTileIndex
 }
 
-func (tm *TileMap) Update(currentTick uint64) (sillyPadExpired bool, expiredSillyPads []SillyPadPos, tileChange bool) {
+func (tm *TileMap) breadthFirstAlgo(x int, y int, baseX int, baseY int, currentTick uint64) {
+	index, inBounds := tm.GetTileIndex(x, y)
+	if !inBounds { // not in bounds
+		return
+	}
+	if !tm.IsTileAGarden(index) { //not a garden, return
+		return
+	}
+	if tm.tempBFSMap[y][x] >= 0 { // this tile was already checked
+		return
+	}
+	dist := absInt(baseX-x) + absInt(baseY-y)
+	tm.tempBFSMap[y][x] = dist
+	tm.revertGardenToColor[y][x].active = true
+
+	numTicks := uint64(dist) * GardenDestroyTicksPerTile
+	tm.revertGardenToColor[y][x].tick = currentTick + numTicks
+
+	tm.breadthFirstAlgo(x+1, y, baseX, baseY, currentTick)
+	tm.breadthFirstAlgo(x-1, y, baseX, baseY, currentTick)
+	tm.breadthFirstAlgo(x, y+1, baseX, baseY, currentTick)
+	tm.breadthFirstAlgo(x, y-1, baseX, baseY, currentTick)
+
+}
+
+func absInt(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
+//HUGE update function. Probably should have made this multiple smaller functions. Oh well
+//Each phase returns values back to gameloop that gameloop needs
+
+func (tm *TileMap) Update(currentTick uint64) (sillyPadExpired bool, expiredSillyPads []SillyPadPos, tileChange bool, d DestroyedTiles, Explosions []ExplosionEvent) {
 
 	sillyPadExpired = false
 	expiredSillyPads = make([]SillyPadPos, 0, 8)
 	tileChange = false
+	Explosions = make([]ExplosionEvent, 0, 8)
 
 	for x := 0; x < tm.Cols; x++ {
 		for y := 0; y < tm.Rows; y++ {
@@ -548,22 +607,62 @@ func (tm *TileMap) Update(currentTick uint64) (sillyPadExpired bool, expiredSill
 		}
 	}
 
+	//wallbreakers
+
 	activeWb := tm.Wallbreakers[:0]
 	for _, wb := range tm.Wallbreakers {
 		if currentTick >= wb.ExpiresAtTick {
 			//expired; this one will start a wall-removal process, then continue the for loop
 			// so it isn't added to the "activeWb" slice
-			result := tm.ExplodeWall(wb.X, wb.Y)
-			tileChange = result || tileChange // if result is true, make tilechange true. but don't make tilechange false only by one false result
+			result := tm.ExplodeWall(wb.X, wb.Y, currentTick)
+			if result > 0 { //NOTE: a 0 here means no tile was changed. This only works if the 0 index tile is not a wall. (By default I've made the color tiles be 0-4 so this shouldn't be an issue)
+				tileChange = true
+				switch result { // count how many gardens are destroyed, so the gameloop can update the score
+				case 6:
+					d.Silver.Walls++
+				case 9:
+					d.Gold.Walls++
+				case 12:
+					d.White.Walls++
+				case 15:
+					d.Black.Walls++
+				}
+			}
 
-			//TODO make an explosion "ghost" any players within 2 tiles of the explosion
+			Explosions = append(Explosions, ExplosionEvent{X: wb.X, Y: wb.Y})
+
 			continue
 		}
 		activeWb = append(activeWb, wb)
 	}
 	tm.Wallbreakers = activeWb
 
-	return sillyPadExpired, expiredSillyPads, tileChange
+	// garden destroyer updater
+	for x := 0; x < tm.Cols; x++ {
+		for y := 0; y < tm.Rows; y++ {
+			if tm.revertGardenToColor[y][x].active && currentTick >= tm.revertGardenToColor[y][x].tick {
+
+				switch tm.Tiles[y][x].Index { // count how many gardens are destroyed, so the gameloop can update the score
+				case 7:
+					d.Silver.Gardens++
+				case 10:
+					d.Gold.Gardens++
+				case 13:
+					d.White.Gardens++
+				case 16:
+					d.Black.Gardens++
+				}
+				r := uint8(tm.rng.Intn(NumColors))
+				tm.SetTile(x, y, r)
+				tm.AddChange(x, y, r)
+				tileChange = true
+				tm.revertGardenToColor[y][x].active = false
+				//TODO subtract 2 from score
+			}
+		}
+	}
+
+	return sillyPadExpired, expiredSillyPads, tileChange, d, Explosions
 }
 
 func (tm *TileMap) CheckMovement(nx int, ny int, id int, playerWallIndex uint8) bool {
@@ -609,7 +708,7 @@ func (tm *TileMap) TryToBuildWall(x int, y int, FoundationIndex uint8, WallIndex
 
 	//if i == pl.FoundationIndex { //TODO use pl.FoundationIndex
 	if i == uint8(FoundationIndex) {
-		tm.SetTileAndAddChange(x, y, WallIndex) //TODO use pl.WallIndex
+		tm.SetTileAndAddChange(x, y, WallIndex)
 		return true
 	}
 

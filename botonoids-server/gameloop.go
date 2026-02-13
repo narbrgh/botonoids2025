@@ -304,7 +304,7 @@ func runGameLoop(room *Room) {
 
 		// 6) Updaters. (tile, player, etc)
 		room.UpdatePhase()
-		sillyPadRemoved, expiredSillyPads, tileChanged := room.Map.Update(room.Tick)
+		sillyPadRemoved, expiredSillyPads, tileChanged, destroyedTiles, Explosions := room.Map.Update(room.Tick)
 
 		if sillyPadRemoved {
 			for _, p := range expiredSillyPads {
@@ -324,6 +324,19 @@ func runGameLoop(room *Room) {
 			}
 			room.Map.ResetChangeMap()
 			tileChanged = false
+		}
+
+		for _, p := range room.Players {
+			p.UpdateScore(destroyedTiles)
+		}
+
+		for _, p := range Explosions {
+			for _, q := range room.Players {
+				dist := absInt(p.X-q.X) + absInt(p.Y-q.Y)
+				if dist <= ExplosionRadius {
+					q.SetGhost(room.Tick)
+				}
+			}
 		}
 
 		for _, p := range room.Players {

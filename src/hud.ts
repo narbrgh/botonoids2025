@@ -40,9 +40,17 @@ export default class HUD {
         localPlayerId?: number | null;
         numActivePlayers: number;
 
+        //need current tick in order to calculate ghost countdown
+        nowMs: number;
+
     }) {
         //draw background, text, etc
-        const { x, y, width, height, timeLeft, botsById, localPlayerId, numActivePlayers } = opts;
+        const { x, y, width, height, timeLeft, botsById, localPlayerId, numActivePlayers, nowMs } = opts;
+
+
+        // first calculate currentTick
+        currentTick := 0
+
 
         //In order, from left to right, it will draw score bars, then player cards, then time left
 
@@ -135,13 +143,13 @@ export default class HUD {
         const me = botsById.get(localPlayerId ?? -1)
 
         if (!me) {
-            this.drawPlayerCardsFromObserverPerspective(x, y, width, height, botsById, numActivePlayers);
+            this.drawPlayerCardsFromObserverPerspective(x, y, width, height, botsById, numActivePlayers, currentTick);
         }else if (me.getRole() === "observer") {
-            this.drawPlayerCardsFromObserverPerspective(x, y, width, height, botsById, numActivePlayers);
+            this.drawPlayerCardsFromObserverPerspective(x, y, width, height, botsById, numActivePlayers, currentTick);
         } else {
             //this.drawPlayerCardsFromPlayerPerspective(me);
             //Currently this is not implemented, but eventually the HUD will look slightly different for players vs observers
-            this.drawPlayerCardsFromObserverPerspective(x, y, width, height, botsById, numActivePlayers);
+            this.drawPlayerCardsFromObserverPerspective(x, y, width, height, botsById, numActivePlayers, currentTick);
         }
 
         // Time left
@@ -164,7 +172,7 @@ export default class HUD {
         
     }
 
-    private drawPlayerCardsFromObserverPerspective(x: number, y: number, width: number, height: number, botsById: Map<number, Botonoid>, n: number) {
+    private drawPlayerCardsFromObserverPerspective(x: number, y: number, width: number, height: number, botsById: Map<number, Botonoid>, n: number, currentTick: number) {
         const totalPlayerCardDrawWidth = (n * PLAYER_CARD_WIDTH) + ((n-1) * PLAYER_CARD_SPACING)
         let currentX: number = x+  width / 2 - totalPlayerCardDrawWidth / 2
         let drawY: number = y + height / 2 - PLAYER_CARD_HEIGHT / 2
@@ -172,7 +180,7 @@ export default class HUD {
         const bots = [...botsById.values()].sort((a, b) => a.getId() - b.getId());
         for (const bot of bots) { 
             if (bot && bot.getRole() != "observer") {
-                this.drawPlayerInfoCardSmall(currentX, drawY, PLAYER_CARD_WIDTH, PLAYER_CARD_HEIGHT, bot)
+                this.drawPlayerInfoCardSmall(currentX, drawY, PLAYER_CARD_WIDTH, PLAYER_CARD_HEIGHT, bot, currentTick)
                 currentX += PLAYER_CARD_SPACING + PLAYER_CARD_WIDTH
             }
         }
@@ -206,7 +214,7 @@ export default class HUD {
 
     // Small player info card is what is drawn for observer mode for all players, 
     // and is drawn for all the "other" players in player mode
-    private drawPlayerInfoCardSmall(x: number, y: number, width: number, height: number, bot: Botonoid) {
+    private drawPlayerInfoCardSmall(x: number, y: number, width: number, height: number, bot: Botonoid, currentTick: number) {
         
         //first some calculations. if there is a box like this:
         // ---------------------
@@ -301,15 +309,15 @@ export default class HUD {
         this.itemsSprite.frame = 2
         this.itemsSprite.drawImage(this.ctx, dL[2].x, dL[2].y)
 
-        if (bot.getGhostCountLeft() > 0) {
+        if (bot.getGhostCountLeft(currentTick) > 0) {
             this.ctx.font =  '400 19px "Goldman"';
 
             this.ctx.lineWidth = 3;
             this.ctx.fillStyle = '#ffffff';
             this.ctx.strokeStyle = "#000000"
 
-            this.ctx.strokeText(String(bot.getGhostCountLeft()), dL[2].x + 5, dL[2].y + spriteH / 2 + 4);
-            this.ctx.fillText(String(bot.getGhostCountLeft()), dL[2].x+5, dL[2].y+spriteH/2+4);
+            this.ctx.strokeText(String(bot.getGhostCountLeft(currentTick)), dL[2].x + 5, dL[2].y + spriteH / 2 + 4);
+            this.ctx.fillText(String(bot.getGhostCountLeft(currentTick)), dL[2].x+5, dL[2].y+spriteH/2+4);
         }
     }
        

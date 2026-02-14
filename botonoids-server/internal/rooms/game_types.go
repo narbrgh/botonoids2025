@@ -1,4 +1,4 @@
-package main
+package rooms
 
 type DirType string
 type ModeType string
@@ -56,23 +56,3 @@ const (
 	ItemCreate CreateOrRemove = "create"
 	ItemRemove CreateOrRemove = "remove"
 )
-
-func makeConfig() ConfigMsg {
-	return ConfigMsg{
-		Type: "config",
-
-		TickHz:    TickHz,
-		MoveTicks: MoveTicks,
-
-		MoveDurMs:           int(MoveTicks) * 1000 / TickHz,
-		ColorCooldownMs:     1200, //example
-		MaxTilesColorChange: 5,
-		TileSize:            32,
-
-		Seed: NewSeed,
-		Cols: WorldCols,
-		Rows: WorldRows,
-
-		ConfigVersion: 1,
-	}
-}

@@ -2,6 +2,7 @@ package main
 
 import (
 	// Provides JSON encoding/decoding utilities. Here it is needed specifically for json.RawMessage, which lets us defer decoding part of a JSON message.
+	"botonoids-server/internal/rooms"
 	"log"      // Provides logging utilities (log.Println, log.Printf, log.Fatal).
 	"net/http" // Provides HTTP server functionality.
 	// Provides low-level atomic operations. We use this to safely generate unique player IDs  across concurrent connections.
@@ -13,7 +14,7 @@ import (
 // ─────────────────────────────
 func main() {
 
-	room := NewRoom("default")
+	room := rooms.NewRoom("default")
 
 	go runGameLoop(room)
 

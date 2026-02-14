@@ -1,4 +1,4 @@
-package main
+package rooms
 
 import "math/rand"
 

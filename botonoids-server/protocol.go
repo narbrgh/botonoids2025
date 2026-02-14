@@ -1,6 +1,7 @@
 package main
 
 import (
+	"botonoids-server/internal/rooms"
 	"encoding/json"
 )
 
@@ -53,9 +54,9 @@ type ClientMsg struct {
 // ------role can be gold, white, silver, or black bot. Future: observer -------
 
 type ReadyCmd struct {
-	Type  string `json:"type"`  // "ready"
-	Role  Role   `json:"role"`  // RoleGoldBot etc
-	Model Model  `json:"model"` // ModelAlphanoid etc
+	Type  string      `json:"type"`  // "ready"
+	Role  rooms.Role  `json:"role"`  // RoleGoldBot etc
+	Model rooms.Model `json:"model"` // ModelAlphanoid etc
 }
 
 func decodeReadyCmd(raw json.RawMessage) (ReadyCmd, error) {
@@ -96,8 +97,8 @@ type QueuedCmd struct {
 }
 
 type MoveCmd struct {
-	Type string  `json:"type"` // "move"
-	Dir  DirType `json:"dir"`  // "up" | "down" | "left" | "right"
+	Type string        `json:"type"` // "move"
+	Dir  rooms.DirType `json:"dir"`  // "up" | "down" | "left" | "right"
 }
 
 func decodeMoveCmd(raw json.RawMessage) (MoveCmd, error) {
@@ -107,8 +108,8 @@ func decodeMoveCmd(raw json.RawMessage) (MoveCmd, error) {
 }
 
 type FacingCmd struct {
-	Type string  `json:"type"` // "facing"
-	Dir  DirType `json:"dir"`  // "up" | "down" | "left" | "right"
+	Type string        `json:"type"` // "facing"
+	Dir  rooms.DirType `json:"dir"`  // "up" | "down" | "left" | "right"
 }
 
 func decodeFacingCmd(raw json.RawMessage) (FacingCmd, error) {
@@ -138,8 +139,8 @@ type UseItemCmd struct {
 }
 
 type InputCmd struct {
-	Type string   `json:"type"` // "input"
-	Dir  *DirType `json:"dir"`  // "up|down|left|right". nil = no input
+	Type string         `json:"type"` // "input"
+	Dir  *rooms.DirType `json:"dir"`  // "up|down|left|right". nil = no input
 }
 
 func decodeInputCmd(raw json.RawMessage) (InputCmd, error) {
@@ -149,18 +150,18 @@ func decodeInputCmd(raw json.RawMessage) (InputCmd, error) {
 }
 
 type PlayerSnapshotMsg struct {
-	Type            string         `json:"type"` // "playerSnapshot"
-	Tick            uint64         `json:"tick"`
-	Phase           Phase          `json:"phase"`
-	PhaseEndsAtTick uint64         `json:"phaseEndsAtTick"`
-	Players         []*PlayerState `json:"players"`
+	Type            string               `json:"type"` // "playerSnapshot"
+	Tick            uint64               `json:"tick"`
+	Phase           rooms.Phase          `json:"phase"`
+	PhaseEndsAtTick uint64               `json:"phaseEndsAtTick"`
+	Players         []*rooms.PlayerState `json:"players"`
 }
 
 type TileMapSnapshotMsg struct {
-	Type    string   `json:"type"` // "tileMapSnapshot"
-	Tick    uint64   `json:"tick"`
-	Phase   Phase    `json:"phase"`
-	TileMap *TileMap `json:"tileMap"`
+	Type    string         `json:"type"` // "tileMapSnapshot"
+	Tick    uint64         `json:"tick"`
+	Phase   rooms.Phase    `json:"phase"`
+	TileMap *rooms.TileMap `json:"tileMap"`
 }
 
 type TileChangeMsg struct { // this changes a single tile
@@ -171,26 +172,26 @@ type TileChangeMsg struct { // this changes a single tile
 }
 
 type TileChangeListMsg struct { // a list of several tile changes, such as when a combo or a garden is achieved
-	Type           string      `json:"type"` //tileChangeList
-	TileChangeList []TileDelta `json:"tileChangeList"`
+	Type           string            `json:"type"` //tileChangeList
+	TileChangeList []rooms.TileDelta `json:"tileChangeList"`
 }
 
 type SillyPadMsg struct {
-	Type          string         `json:"type"` //sillyPadMsg
-	Action        CreateOrRemove `json:"action"`
-	X             int            `json:"x"`
-	Y             int            `json:"y"`
-	OwnerId       int            `json:"ownerId"`
-	ExpiresAtTick uint64         `json:"expiresAtTick"`
+	Type          string               `json:"type"` //sillyPadMsg
+	Action        rooms.CreateOrRemove `json:"action"`
+	X             int                  `json:"x"`
+	Y             int                  `json:"y"`
+	OwnerId       int                  `json:"ownerId"`
+	ExpiresAtTick uint64               `json:"expiresAtTick"`
 }
 
 type WallbreakerMsg struct {
-	Type          string         `json:"type"` //wallbreakerMsg
-	Action        CreateOrRemove `json:"action"`
-	X             int            `json:"x"`
-	Y             int            `json:"y"`
-	StartTick     uint64         `json:"startTick"`
-	ExpiresAtTick uint64         `json:"expiresAtTick"`
+	Type          string               `json:"type"` //wallbreakerMsg
+	Action        rooms.CreateOrRemove `json:"action"`
+	X             int                  `json:"x"`
+	Y             int                  `json:"y"`
+	StartTick     uint64               `json:"startTick"`
+	ExpiresAtTick uint64               `json:"expiresAtTick"`
 }
 
 type TileInitiateChangeMsg struct {
@@ -203,8 +204,8 @@ type TileInitiateChangeMsg struct {
 }
 
 // helper function to encode once
-func encodePlayerSnapshot(room *Room) ([]byte, error) {
-	players := make([]*PlayerState, 0, len(room.Players))
+func encodePlayerSnapshot(room *rooms.Room) ([]byte, error) {
+	players := make([]*rooms.PlayerState, 0, len(room.Players))
 	for _, p := range room.Players {
 		players = append(players, p)
 	}
@@ -213,7 +214,7 @@ func encodePlayerSnapshot(room *Room) ([]byte, error) {
 	return json.Marshal(msg)
 }
 
-func encodeTileMapSnapshotMsg(room *Room) ([]byte, error) {
+func encodeTileMapSnapshotMsg(room *rooms.Room) ([]byte, error) {
 	msg := TileMapSnapshotMsg{Type: "tileMapSnapshot", Tick: room.Tick, Phase: room.Phase, TileMap: room.Map}
 	return json.Marshal(msg)
 }

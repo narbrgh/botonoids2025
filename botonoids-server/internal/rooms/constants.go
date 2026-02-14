@@ -1,4 +1,4 @@
-package main
+package rooms
 
 // ---------00-0-0-0-0-0-0-0-0------
 // --- CONSTANTS -------000--0--00--

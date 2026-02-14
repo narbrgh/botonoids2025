@@ -1,6 +1,7 @@
 package main
 
 import (
+	"botonoids-server/internal/rooms"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -20,14 +21,8 @@ var upgrader = websocket.Upgrader{ // This function controls whether cross-origi
 // ----- More STRUCTS -----------
 // ------------*_*_*_*_*_*-_-_-_-
 
-type Client struct {
-	PlayerID int
-	Conn     *websocket.Conn
-	Send     chan []byte // outbound messages (already encoded JSON)
-}
-
 type Register struct {
-	Client *Client
+	Client *rooms.Client
 }
 
 type Unregister struct {
@@ -35,7 +30,7 @@ type Unregister struct {
 }
 
 // helper function to send JSON
-func sendJSON(cl *Client, v any) {
+func sendJSON(cl *rooms.Client, v any) {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return
@@ -72,7 +67,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) { // This func is called 
 		unregCh <- Unregister{PlayerID: playerID}
 	}()
 
-	client := &Client{
+	client := &rooms.Client{
 		PlayerID: playerID,
 		Conn:     c,
 		Send:     make(chan []byte, 256),

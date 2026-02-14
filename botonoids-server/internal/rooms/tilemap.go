@@ -1,4 +1,4 @@
-package main
+package rooms
 
 import (
 	"math/rand"
@@ -94,6 +94,10 @@ type TileDelta struct { //TileDelta is used for the multiple-tile-change-broadca
 
 func (tm *TileMap) AddChange(x, y int, index uint8) {
 	tm.pending = append(tm.pending, TileDelta{X: x, Y: y, Index: index})
+}
+
+func (tm *TileMap) PendingChanges() []TileDelta {
+	return tm.pending
 }
 
 func (tm *TileMap) ResetChangeMap() {

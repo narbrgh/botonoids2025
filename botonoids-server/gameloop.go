@@ -1,6 +1,7 @@
 package main
 
 import (
+	"botonoids-server/internal/rooms"
 	"encoding/json"
 	"log"
 	"time"
@@ -25,14 +26,6 @@ func drainQueuedCmds(ch <-chan QueuedCmd, dst []QueuedCmd) []QueuedCmd {
 	}
 }
 
-type ColorChangeResult int
-
-const (
-	ColorChangeSuccessful                 ColorChangeResult = iota
-	ColorChangeUnsuccessfulStillDecrement ColorChangeResult = iota
-	ColorChangeUnsuccessfulDoNotDecrement ColorChangeResult = iota
-)
-
 var regCh = make(chan Register, 32)
 var unregCh = make(chan Unregister, 32)
 
@@ -40,7 +33,7 @@ var unregCh = make(chan Unregister, 32)
 // Authoritative game loop (Tick) |
 // --------------------------------
 
-func broadcast(room *Room, msg []byte) {
+func broadcast(room *rooms.Room, msg []byte) {
 	for _, cl := range room.Clients {
 		select {
 		case cl.Send <- msg:
@@ -50,7 +43,7 @@ func broadcast(room *Room, msg []byte) {
 	}
 }
 
-func CheckForWallBuild(room *Room, p *PlayerState) {
+func CheckForWallBuild(room *rooms.Room, p *rooms.PlayerState) {
 	if p.ActionPressed == true {
 		result := room.Map.TryToBuildWall(p.X, p.Y, p.FoundationIndex, p.WallIndex, p.ID) //TODO use foundation index and wallindex
 		//result := room.Map.TryToBuildWall(p.X, p.Y, 5, 6, p.ID)
@@ -61,7 +54,7 @@ func CheckForWallBuild(room *Room, p *PlayerState) {
 			p.NumWallsLeft = p.NumWallsLeft - 1
 
 			//Increase score by points-per-wall
-			p.Score += PointsPerWall
+			p.Score += rooms.PointsPerWall
 
 			// check for "garden" completion
 			// TODO add foundation index, wallindex, and garden index
@@ -69,7 +62,7 @@ func CheckForWallBuild(room *Room, p *PlayerState) {
 			if gardenResult == true {
 				//numFoundationsDestroyed++
 				p.NumWallsLeft -= numFoundationsDestroyed
-				p.Score += numGardensBuilt * PointsPerGarden
+				p.Score += numGardensBuilt * rooms.PointsPerGarden
 			}
 
 			if p.NumWallsLeft <= 0 {
@@ -83,14 +76,14 @@ func CheckForWallBuild(room *Room, p *PlayerState) {
 				// else, enter cooldown
 
 				if p.NumColorChangesLeft > 0 {
-					p.Mode = ColorChanging
+					p.Mode = rooms.ColorChanging
 				} else {
 					p.EnterCooldown(room.Tick)
 				}
 			}
 
 			//now send a message (this will broadcast the walls built, and the change from foundation tiles to regular colors)
-			msg := TileChangeListMsg{Type: "tileChangeList", TileChangeList: room.Map.pending}
+			msg := TileChangeListMsg{Type: "tileChangeList", TileChangeList: room.Map.PendingChanges()}
 			if b, err := json.Marshal(msg); err == nil {
 				broadcast(room, b)
 			}
@@ -100,8 +93,8 @@ func CheckForWallBuild(room *Room, p *PlayerState) {
 	}
 }
 
-func runGameLoop(room *Room) {
-	tickDur := time.Second / time.Duration(TickHz)
+func runGameLoop(room *rooms.Room) {
+	tickDur := time.Second / time.Duration(rooms.TickHz)
 	ticker := time.NewTicker(tickDur)
 	defer ticker.Stop()
 
@@ -115,6 +108,7 @@ func runGameLoop(room *Room) {
 			select {
 			case r := <-regCh:
 				room.Clients[r.Client.PlayerID] = r.Client
+				managedJoinPlayer(r.Client.PlayerID)
 				//create player state if missing
 				if _, ok := room.Players[r.Client.PlayerID]; !ok {
 
@@ -123,41 +117,42 @@ func runGameLoop(room *Room) {
 
 					switch r.Client.PlayerID { // spawn based on playerID
 					case 1:
-						spawnX = SpawnBaseX
-						spawnY = SpawnBaseY
+						spawnX = rooms.SpawnBaseX
+						spawnY = rooms.SpawnBaseY
 					case 2:
-						spawnX = WorldCols - SpawnBaseX
-						spawnY = WorldRows - SpawnBaseY
+						spawnX = rooms.WorldCols - rooms.SpawnBaseX
+						spawnY = rooms.WorldRows - rooms.SpawnBaseY
 					case 3:
-						spawnX = SpawnBaseX
-						spawnY = WorldRows - SpawnBaseY
+						spawnX = rooms.SpawnBaseX
+						spawnY = rooms.WorldRows - rooms.SpawnBaseY
 					case 4:
-						spawnX = WorldCols - SpawnBaseX
-						spawnY = SpawnBaseY
+						spawnX = rooms.WorldCols - rooms.SpawnBaseX
+						spawnY = rooms.SpawnBaseY
 					}
 
-					room.Players[r.Client.PlayerID] = &PlayerState{
+					room.Players[r.Client.PlayerID] = &rooms.PlayerState{
 						ID:     r.Client.PlayerID,
 						X:      spawnX,
 						Y:      spawnY,
-						Facing: Down,
+						Facing: rooms.Down,
 						Moving: false,
 						FromX:  spawnX, FromY: spawnY, ToX: spawnX, ToY: spawnY,
 						MoveStartTick:       room.Tick,
-						MoveDurTicks:        MoveTicks,
-						Mode:                Walking,
+						MoveDurTicks:        rooms.MoveTicks,
+						Mode:                rooms.Walking,
 						NumColorChangesLeft: 0,
 						NumWallsLeft:        0,
 						Score:               0,
-						SelectedItem:        ItemSillyPad,
-						NumWallbreakersLeft: DEFAULT_WALLBREAKERS,
-						NumSillyPadsLeft:    DEFAULT_SILLY_PADS,
+						SelectedItem:        rooms.ItemSillyPad,
+						NumWallbreakersLeft: rooms.DEFAULT_WALLBREAKERS,
+						NumSillyPadsLeft:    rooms.DEFAULT_SILLY_PADS,
 						FoundationIndex:     5,
 						WallIndex:           6,
 						GardenIndex:         7,
 					}
 				}
 			case u := <-unregCh:
+				managedLeavePlayer(u.PlayerID)
 				if cl, ok := room.Clients[u.PlayerID]; ok {
 					close(cl.Send) // stop write goroutine
 					delete(room.Clients, u.PlayerID)
@@ -180,7 +175,7 @@ func runGameLoop(room *Room) {
 		// 4) advance any in-progress moves
 		for _, p := range room.Players {
 			if !p.Moving {
-				if p.Mode == WallBuilding {
+				if p.Mode == rooms.WallBuilding {
 					CheckForWallBuild(room, p)
 				}
 
@@ -195,14 +190,14 @@ func runGameLoop(room *Room) {
 				p.FromX, p.FromY = p.X, p.Y
 				p.ToX, p.ToY = p.X, p.Y
 
-				if p.Mode == ColorChanging {
-					r := CheckColorChangeResult(p.X, p.Y, room.Map)
+				if p.Mode == rooms.ColorChanging {
+					r := rooms.CheckColorChangeResult(p.X, p.Y, room.Map)
 					switch r {
-					case ColorChangeUnsuccessfulDoNotDecrement:
+					case rooms.ColorChangeUnsuccessfulDoNotDecrement:
 						//do nothing
-					case ColorChangeUnsuccessfulStillDecrement:
+					case rooms.ColorChangeUnsuccessfulStillDecrement:
 						p.DecrementNumColorChanges(room.Tick)
-					case ColorChangeSuccessful:
+					case rooms.ColorChangeSuccessful:
 
 						// check for combo,
 						// if not combo, then decrement numColorChanges while checking for changing to cooldown.
@@ -214,9 +209,9 @@ func runGameLoop(room *Room) {
 						i, ok := room.Map.GetTileIndexAfterColorChange(p.X, p.Y)
 
 						if ok {
-							comboLength := TileMapInitiateColorChange(room.Map, p.X, p.Y, i, room.Tick, ColorChangeTicks, p.ID) // sends signal to the tilemap to start a color change. The tilemap will first check for a combo
+							comboLength := rooms.TileMapInitiateColorChange(room.Map, p.X, p.Y, i, room.Tick, rooms.ColorChangeTicks, p.ID) // sends signal to the tilemap to start a color change. The tilemap will first check for a combo
 
-							if comboLength >= MinimumCombo {
+							if comboLength >= rooms.MinimumCombo {
 								//NOTE: special case. if it is a combo, subtract 1 from numColorChanges, but don't go to cooldown yet. This way if you get a combo on your last colorChange, you still have to do cooldown after done building walls
 								p.NumColorChangesLeft = p.NumColorChangesLeft - 1
 
@@ -227,11 +222,11 @@ func runGameLoop(room *Room) {
 								//room.Map.InitiateCombo(5)
 
 								// change mode to wallbuilding
-								p.Mode = WallBuilding
+								p.Mode = rooms.WallBuilding
 								p.NumWallsLeft = comboLength - 3 // you can build 3 less walls than what your combo was
 
 								//now send a message
-								msg := TileChangeListMsg{Type: "tileChangeList", TileChangeList: room.Map.pending}
+								msg := TileChangeListMsg{Type: "tileChangeList", TileChangeList: room.Map.PendingChanges()}
 								if b, err := json.Marshal(msg); err == nil {
 									broadcast(room, b)
 								}
@@ -241,7 +236,7 @@ func runGameLoop(room *Room) {
 
 							} else { //not a combo, continue with the tile change
 								p.DecrementNumColorChanges(room.Tick)
-								msg := TileInitiateChangeMsg{Type: "tileInitiateChange", X: p.X, Y: p.Y, ToIndex: i, TileChangeStartTick: room.Tick, TileChangeDurTicks: ColorChangeTicks}
+								msg := TileInitiateChangeMsg{Type: "tileInitiateChange", X: p.X, Y: p.Y, ToIndex: i, TileChangeStartTick: room.Tick, TileChangeDurTicks: rooms.ColorChangeTicks}
 
 								if b, err := json.Marshal(msg); err == nil {
 									broadcast(room, b)
@@ -252,7 +247,7 @@ func runGameLoop(room *Room) {
 						//do nothing
 					} //end switch r
 
-				} else if p.Mode == WallBuilding {
+				} else if p.Mode == rooms.WallBuilding {
 					CheckForWallBuild(room, p)
 				} // end else if p.Mode == WallBuilding
 			}
@@ -280,18 +275,18 @@ func runGameLoop(room *Room) {
 			// attempt to start move in p.IntentDir
 			nx, ny := p.X, p.Y
 			switch dir {
-			case Up:
+			case rooms.Up:
 				ny--
-			case Down:
+			case rooms.Down:
 				ny++
-			case Left:
+			case rooms.Left:
 				nx--
-			case Right:
+			case rooms.Right:
 				nx++
 			}
 
 			// bounds/collision check here; if blocked, do not start move
-			if !room.Map.CheckMovement(nx, ny, p.ID, p.WallIndex, p.Mode == Ghost) {
+			if !room.Map.CheckMovement(nx, ny, p.ID, p.WallIndex, p.Mode == rooms.Ghost) {
 				continue
 			}
 
@@ -299,17 +294,18 @@ func runGameLoop(room *Room) {
 			p.FromX, p.FromY = p.X, p.Y
 			p.ToX, p.ToY = nx, ny
 			p.MoveStartTick = room.Tick
-			p.MoveDurTicks = MoveTicks
+			p.MoveDurTicks = rooms.MoveTicks
 		}
 
 		// 6) Updaters. (tile, player, etc)
 		room.UpdatePhase()
+		managedSyncStatusFromPhase(room.Phase)
 		sillyPadRemoved, expiredSillyPads, tileChanged, destroyedTiles, Explosions := room.Map.Update(room.Tick)
 
 		if sillyPadRemoved {
 			for _, p := range expiredSillyPads {
 				//now send a message
-				msg := SillyPadMsg{Type: "sillyPadMsg", Action: "remove", X: p.X, Y: p.Y}
+				msg := SillyPadMsg{Type: "sillyPadMsg", Action: rooms.ItemRemove, X: p.X, Y: p.Y}
 				if b, err := json.Marshal(msg); err == nil {
 					broadcast(room, b)
 				}
@@ -318,7 +314,7 @@ func runGameLoop(room *Room) {
 
 		if tileChanged {
 			// send a message (this will broadcast the wall destroyed
-			msg := TileChangeListMsg{Type: "tileChangeList", TileChangeList: room.Map.pending}
+			msg := TileChangeListMsg{Type: "tileChangeList", TileChangeList: room.Map.PendingChanges()}
 			if b, err := json.Marshal(msg); err == nil {
 				broadcast(room, b)
 			}
@@ -333,7 +329,7 @@ func runGameLoop(room *Room) {
 		for _, p := range Explosions {
 			for _, q := range room.Players {
 				dist := absInt(p.X-q.X) + absInt(p.Y-q.Y)
-				if dist <= ExplosionRadius {
+				if dist <= rooms.ExplosionRadius {
 					q.SetGhost(room.Tick)
 				}
 			}
@@ -359,4 +355,11 @@ func runGameLoop(room *Room) {
 
 		room.Tick++
 	}
+}
+
+func absInt(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
 }

@@ -1,67 +1,12 @@
 package main
 
-import "encoding/json"
+import (
+	"botonoids-server/internal/rooms"
+	"encoding/json"
+)
 
-func isValidDir(d DirType) bool {
-	switch d {
-	case Up, Down, Left, Right:
-		return true
-	default:
-		return false
-	}
-}
-
-type PlayerState struct { // this is the struct that gets sent through the protocol over the wire
-	ID        int      `json:"id"`
-	X         int      `json:"x"`
-	Y         int      `json:"y"`
-	Facing    DirType  `json:"facing"`
-	IntentDir *DirType `json:"intentDir,omitempty"`
-
-	Moving        bool   `json:"moving"`
-	FromX         int    `json:"fromX"`
-	FromY         int    `json:"fromY"`
-	ToX           int    `json:"toX"`
-	ToY           int    `json:"toY"`
-	MoveStartTick uint64 `json:"moveStartTick"`
-	MoveDurTicks  uint64 `json:"moveDurTicks"`
-
-	// variables for logic on changing colors, building walls, etc
-	Mode                ModeType `json:"mode"`
-	NumColorChangesLeft int      `json:"numColorChangesLeft"`
-	NumWallsLeft        int      `json:"numWallsLeft"`
-	CooldownStartTick   uint64   `json:"cooldownStartTick"`
-	CooldownDurTicks    uint64   `json:"cooldownDurTicks"`
-
-	// variables for logic on items and score
-	Score               int      `json:"score"`
-	SelectedItem        ItemType `json:"selectedItem"`
-	NumWallbreakersLeft int      `json:"numWallbreakersLeft"`
-	NumSillyPadsLeft    int      `json:"numSillyPadsLeft"`
-
-	// tile indices for foundation, wall, and garden for each Role
-	FoundationIndex uint8 `json:"-"`
-	WallIndex       uint8 `json:"-"`
-	GardenIndex     uint8 `json:"-"`
-
-	// variables for Phase and game flow
-	Ready            bool   `json:"ready"`
-	SelectedRole     Role   `json:"role"`
-	SelectedModel    Model  `json:"model"`
-	TickSelectedRole uint64 `json:"-"`
-
-	//server-side bool to keep track of if the action button is UP or DOWN
-	ActionPressed bool `json:"-"`
-}
-
-// -------------------------------------
-// APPLY QUEUED CMD TO STATE -----------
-// ------ actually mutates player's state -----
-// ----------- AUTHORITATIVE SERVER ------
-//---------------------------------------
-
-func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
-
+// APPLY QUEUED CMD TO STATE
+func applyQueuedCmdToRoom(room *rooms.Room, qc QueuedCmd) {
 	p, ok := room.Players[qc.PlayerID]
 	if !ok {
 		return
@@ -72,17 +17,14 @@ func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
 		return
 	}
 
-	if room.Phase != PhasePlaying {
-		//only process non-playing commands
+	if room.Phase != rooms.PhasePlaying {
 		if typ == "ready" {
 			cmd, err := decodeReadyCmd(qc.Cmd)
 			if err != nil {
 				return
 			}
 
-			//first make sure the selected role is available
-			if room.RoleTaken[cmd.Role] && cmd.Role != RoleObserver && cmd.Role != RoleRandomBot {
-
+			if room.RoleTaken[cmd.Role] && cmd.Role != rooms.RoleObserver && cmd.Role != rooms.RoleRandomBot {
 				if cl, ok := room.Clients[qc.PlayerID]; ok {
 					sendJSON(cl, ServerMsg{Type: "roleInvalid", Msg: "role taken"})
 				}
@@ -92,7 +34,8 @@ func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
 			p.Ready = true
 			p.SelectedRole = cmd.Role
 			p.SelectedModel = cmd.Model
-			p.TickSelectedRole = room.Tick // keep track of WHEN the player selected their role, because if they weren't first, they don't get it!
+			p.TickSelectedRole = room.Tick
+			managedSetPlayerReady(qc.PlayerID, true)
 		}
 		return
 	}
@@ -103,140 +46,109 @@ func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
 		if err != nil {
 			return
 		}
-		p.Facing = cmd.Dir // or just cmd.Dir if string
+		p.Facing = cmd.Dir
 
-	case "move": // NOTE! This code is no longer "called."
+	case "move":
 		cmd, err := decodeMoveCmd(qc.Cmd)
-		if err != nil || !isValidDir(cmd.Dir) {
+		if err != nil || !rooms.IsValidDir(cmd.Dir) {
 			return
 		}
-
-		//alraedy moving? ignore new move commands for now
 		if p.Moving {
 			return
 		}
-
-		// set facing regardless
 		p.Facing = cmd.Dir
 
 		nx, ny := p.X, p.Y
 		switch cmd.Dir {
-		case Up:
+		case rooms.Up:
 			ny--
-		case Down:
+		case rooms.Down:
 			ny++
-		case Left:
+		case rooms.Left:
 			nx--
-		case Right:
+		case rooms.Right:
 			nx++
 		}
 
-		//bounds
-		if !room.Map.CheckMovement(nx, ny, p.ID, p.WallIndex, p.Mode == Ghost) {
+		if !room.Map.CheckMovement(nx, ny, p.ID, p.WallIndex, p.Mode == rooms.Ghost) {
 			return
 		}
 
-		// start movement
 		p.Moving = true
 		p.FromX, p.FromY = p.X, p.Y
 		p.ToX, p.ToY = nx, ny
 		p.MoveStartTick = room.Tick
-		p.MoveDurTicks = MoveTicks
+		p.MoveDurTicks = rooms.MoveTicks
 
-	// NOTE: This "case action" is no longer called. case action was for the original edge-triggered case
-	// where it was actually PRESSED.
-	//
-	// If you want to re-enable this, go to Botonoids.ts, uncomment the first line of applyCommand
-	// (control+F "ERIKISCOOL" to find the line).
-	//
-	// Then go to KeyboardController.ts, under ConsumeCommands, and add:
-	//     if (this.anyPressed(this.keyMap.action)) cmds.push({type: 'action' });
-	case "action":
+	case "action", "actionDown":
 		switch p.Mode {
-		case Walking:
-			p.Mode = ColorChanging
-			p.NumColorChangesLeft = MaxNumColorChanges
-		case WallBuilding:
-			p.ActionPressed = true
-		}
-
-	case "actionDown":
-		switch p.Mode {
-		case Walking:
-			p.Mode = ColorChanging
-			p.NumColorChangesLeft = MaxNumColorChanges
-		case WallBuilding:
+		case rooms.Walking:
+			p.Mode = rooms.ColorChanging
+			p.NumColorChangesLeft = rooms.MaxNumColorChanges
+		case rooms.WallBuilding:
 			p.ActionPressed = true
 		}
 
 	case "actionUp":
-		//only meaningful for wallBuilding
 		p.ActionPressed = false
 
 	case "changeItem":
 		switch p.SelectedItem {
-		case ItemSillyPad:
-			p.SelectedItem = ItemWallbreaker
-
-		case ItemWallbreaker:
-			p.SelectedItem = ItemGhost
-
-		case ItemGhost:
-			p.SelectedItem = ItemSillyPad
+		case rooms.ItemSillyPad:
+			p.SelectedItem = rooms.ItemWallbreaker
+		case rooms.ItemWallbreaker:
+			p.SelectedItem = rooms.ItemGhost
+		case rooms.ItemGhost:
+			p.SelectedItem = rooms.ItemSillyPad
 		}
+
 	case "useItem":
-		if p.Mode == Ghost { //don't let ghosts use items
+		if p.Mode == rooms.Ghost {
 			break
 		}
 
 		switch p.SelectedItem {
-		case ItemSillyPad:
+		case rooms.ItemSillyPad:
 			if p.NumSillyPadsLeft > 0 {
 				sillyPadX := p.X
 				sillyPadY := p.Y
 				if p.Moving {
 					sillyPadX, sillyPadY = p.GetTilePosWhileMoving(room.Tick)
 				}
-				if room.Map.CreateSillyPad(sillyPadX, sillyPadY, p.ID, room.Tick, SillyPadTicks) {
-					//silly pad created
+				if room.Map.CreateSillyPad(sillyPadX, sillyPadY, p.ID, room.Tick, rooms.SillyPadTicks) {
 					p.NumSillyPadsLeft--
-
-					//now send a message
-					msg := SillyPadMsg{Type: "sillyPadMsg", Action: "create", X: sillyPadX, Y: sillyPadY, OwnerId: p.ID, ExpiresAtTick: room.Tick + SillyPadTicks}
+					msg := SillyPadMsg{Type: "sillyPadMsg", Action: rooms.ItemCreate, X: sillyPadX, Y: sillyPadY, OwnerId: p.ID, ExpiresAtTick: room.Tick + rooms.SillyPadTicks}
 					if b, err := json.Marshal(msg); err == nil {
 						broadcast(room, b)
 					}
 				}
 			}
-		case ItemWallbreaker:
+		case rooms.ItemWallbreaker:
 			nx := p.X
 			ny := p.Y
 
 			if p.NumWallbreakersLeft > 0 && !p.Moving {
 				switch p.Facing {
-				case Up:
+				case rooms.Up:
 					ny--
-				case Down:
+				case rooms.Down:
 					ny++
-				case Left:
+				case rooms.Left:
 					nx--
-				case Right:
+				case rooms.Right:
 					nx++
 				}
 
-				if room.Map.CreateWallbreaker(nx, ny, room.Tick, WallbreakerTicks) {
+				if room.Map.CreateWallbreaker(nx, ny, room.Tick, rooms.WallbreakerTicks) {
 					p.NumWallbreakersLeft--
-
-					//now send a message
-					msg := WallbreakerMsg{Type: "wallbreakerMsg", Action: "create", X: nx, Y: ny, StartTick: room.Tick, ExpiresAtTick: room.Tick + WallbreakerTicks}
+					msg := WallbreakerMsg{Type: "wallbreakerMsg", Action: rooms.ItemCreate, X: nx, Y: ny, StartTick: room.Tick, ExpiresAtTick: room.Tick + rooms.WallbreakerTicks}
 					if b, err := json.Marshal(msg); err == nil {
 						broadcast(room, b)
 					}
 				}
 			}
-		case ItemGhost:
+		case rooms.ItemGhost:
 			p.SetGhost(room.Tick)
-
 		}
 
 	case "input":
@@ -244,130 +156,19 @@ func applyQueuedCmdToRoom(room *Room, qc QueuedCmd) {
 		if err != nil {
 			return
 		}
-
-		// allow "" to mean "no movement"
 		if cmd.Dir == nil {
 			p.IntentDir = nil
 			return
 		}
 
-		//validate
 		d := *cmd.Dir
-		if !isValidDir(d) {
+		if !rooms.IsValidDir(d) {
 			return
 		}
 
-		//store intent
 		p.IntentDir = cmd.Dir
-
-		// also update facing immediately if you want:
 		if !p.Moving {
 			p.Facing = *cmd.Dir
 		}
 	}
-}
-
-func (pl *PlayerState) Update(currentTick uint64) {
-	if pl.Mode == Cooldown {
-		if currentTick-pl.CooldownStartTick >= pl.CooldownDurTicks {
-			pl.Mode = Walking
-		}
-	}
-	if pl.Mode == Ghost {
-		if currentTick-pl.CooldownStartTick >= pl.CooldownDurTicks {
-			pl.Mode = Walking
-		}
-	}
-}
-
-func (pl *PlayerState) DecrementNumColorChanges(currentTick uint64) {
-	pl.NumColorChangesLeft = pl.NumColorChangesLeft - 1
-	if pl.NumColorChangesLeft <= 0 {
-		pl.EnterCooldown(currentTick)
-	}
-}
-
-func (pl *PlayerState) EnterCooldown(currentTick uint64) {
-	pl.Mode = Cooldown
-	pl.CooldownStartTick = currentTick
-	pl.CooldownDurTicks = CooldownTicks
-}
-
-func (pl *PlayerState) GetTilePosWhileMoving(currentTick uint64) (X int, Y int) {
-	//while walking, the tile position is not updated until the end of the move. However, when doing "tasks" such as
-	//placing silly pads, this looks silly (if you are 1 pixel away from finishing the move, the silly pad will
-	// still show up on the old tile). This function returns pl.X, pl.Y if < 50% of the walk is done; otherwise it returns
-	// pl.Nx, Pl.Ny
-
-	if !pl.Moving {
-		return pl.X, pl.Y
-	}
-
-	if pl.MoveDurTicks == 0 || currentTick <= pl.MoveStartTick {
-		return pl.X, pl.Y
-	}
-
-	elapsed := currentTick - pl.MoveStartTick
-	if elapsed*2 < pl.MoveDurTicks {
-		return pl.X, pl.Y
-	}
-
-	return pl.ToX, pl.ToY
-
-}
-
-func (pl *PlayerState) SetSpecialTilesBasedOnRole() {
-	switch pl.SelectedRole {
-	case RoleGoldBot:
-		pl.FoundationIndex = 8
-		pl.WallIndex = 9
-		pl.GardenIndex = 10
-	case RoleSilverBot:
-		pl.FoundationIndex = 5
-		pl.WallIndex = 6
-		pl.GardenIndex = 7
-	case RoleWhiteBot:
-		pl.FoundationIndex = 11
-		pl.WallIndex = 12
-		pl.GardenIndex = 13
-	case RoleBlackBot:
-		pl.FoundationIndex = 14
-		pl.WallIndex = 15
-		pl.GardenIndex = 16
-	}
-
-}
-
-func (pl *PlayerState) UpdateScore(d DestroyedTiles) {
-	switch pl.SelectedRole {
-	case RoleSilverBot:
-		pl.Score -= d.Silver.Walls*PointsPerWall + d.Silver.Gardens*PointsPerGarden
-	case RoleGoldBot:
-		pl.Score -= d.Gold.Walls*PointsPerWall + d.Gold.Gardens*PointsPerGarden
-	case RoleWhiteBot:
-		pl.Score -= d.White.Walls*PointsPerWall + d.White.Gardens*PointsPerGarden
-	case RoleBlackBot:
-		pl.Score -= d.Black.Walls*PointsPerWall + d.Black.Gardens*PointsPerGarden
-	}
-}
-
-func (pl *PlayerState) SetGhost(currentTick uint64) {
-	pl.Mode = Ghost
-	pl.NumColorChangesLeft = 0
-	pl.NumWallsLeft = 0
-	pl.CooldownStartTick = currentTick
-	pl.CooldownDurTicks = GhostTicks
-	// TODO reset foundations
-}
-
-func (pl *PlayerState) ResetData() { // resets for the beginning of the next game
-	pl.ActionPressed = false
-	pl.Moving = false
-	pl.Facing = Down
-	pl.Mode = Walking
-	pl.NumSillyPadsLeft = DEFAULT_SILLY_PADS
-	pl.NumWallbreakersLeft = DEFAULT_WALLBREAKERS
-	pl.Score = 0
-	pl.SelectedItem = ItemSillyPad
-
 }

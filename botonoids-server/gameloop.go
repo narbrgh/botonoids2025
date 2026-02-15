@@ -7,10 +7,6 @@ import (
 	"time"
 )
 
-// cmdCh is the shared queue that all wsHandler goroutines push into.
-// The buffer (1024) prevents small bursts from immediately blocking reads.
-var cmdCh = make(chan QueuedCmd, 1024)
-
 // ------------0-0-0-0-0-0--------->
 // --------- DRAIN QUEUED COMMANDS -
 // -----:)-:)-:)--------------------
@@ -26,20 +22,13 @@ func drainQueuedCmds(ch <-chan QueuedCmd, dst []QueuedCmd) []QueuedCmd {
 	}
 }
 
-var regCh = make(chan Register, 32)
-var unregCh = make(chan Unregister, 32)
-
 // --------------------------------
 // Authoritative game loop (Tick) |
 // --------------------------------
 
 func broadcast(room *rooms.Room, msg []byte) {
 	for _, cl := range room.Clients {
-		select {
-		case cl.Send <- msg:
-		default:
-			//drop if client is slow
-		}
+		_ = trySend(cl, msg)
 	}
 }
 
@@ -93,14 +82,25 @@ func CheckForWallBuild(room *rooms.Room, p *rooms.PlayerState) {
 	}
 }
 
-func runGameLoop(room *rooms.Room) {
+func runGameLoop(
+	room *rooms.Room,
+	regCh <-chan Register,
+	unregCh <-chan Unregister,
+	cmdCh <-chan QueuedCmd,
+	stopCh <-chan struct{},
+) {
 	tickDur := time.Second / time.Duration(rooms.TickHz)
 	ticker := time.NewTicker(tickDur)
 	defer ticker.Stop()
 
 	pending := make([]QueuedCmd, 0, 256) // local, per-tick scratch buffer. pending queues. use this rather than making new one each tick, so that we don't keep allocating and unallocating memory.
 
-	for range ticker.C {
+	for {
+		select {
+		case <-stopCh:
+			return
+		case <-ticker.C:
+		}
 
 		// 1) process register / unregister events (non-blocking)
 	REGDRAIN: //this REGDRAIN label allows the break later to break out of the for (rather than just the select)
@@ -108,56 +108,81 @@ func runGameLoop(room *rooms.Room) {
 			select {
 			case r := <-regCh:
 				room.Clients[r.Client.PlayerID] = r.Client
-				managedJoinPlayer(r.Client.PlayerID)
-				//create player state if missing
-				if _, ok := room.Players[r.Client.PlayerID]; !ok {
+				p, ok := room.Players[r.Client.PlayerID]
+				if !ok {
+					p = &rooms.PlayerState{ID: r.Client.PlayerID}
+					room.Players[r.Client.PlayerID] = p
+				}
+				if p.Name == "" {
+					p.Name = getPlayerName(r.Client.PlayerID)
+				}
 
-					spawnX := 1
-					spawnY := 1
+				spawnX := 1
+				spawnY := 1
+				switch r.Client.PlayerID {
+				case 1:
+					spawnX = rooms.SpawnBaseX
+					spawnY = rooms.SpawnBaseY
+				case 2:
+					spawnX = rooms.WorldCols - rooms.SpawnBaseX
+					spawnY = rooms.WorldRows - rooms.SpawnBaseY
+				case 3:
+					spawnX = rooms.SpawnBaseX
+					spawnY = rooms.WorldRows - rooms.SpawnBaseY
+				case 4:
+					spawnX = rooms.WorldCols - rooms.SpawnBaseX
+					spawnY = rooms.SpawnBaseY
+				}
 
-					switch r.Client.PlayerID { // spawn based on playerID
-					case 1:
-						spawnX = rooms.SpawnBaseX
-						spawnY = rooms.SpawnBaseY
-					case 2:
-						spawnX = rooms.WorldCols - rooms.SpawnBaseX
-						spawnY = rooms.WorldRows - rooms.SpawnBaseY
-					case 3:
-						spawnX = rooms.SpawnBaseX
-						spawnY = rooms.WorldRows - rooms.SpawnBaseY
-					case 4:
-						spawnX = rooms.WorldCols - rooms.SpawnBaseX
-						spawnY = rooms.SpawnBaseY
-					}
+				if p.Facing == "" {
+					p.Facing = rooms.Down
+				}
+				if p.Mode == "" {
+					p.Mode = rooms.Walking
+				}
+				if p.SelectedItem == "" {
+					p.SelectedItem = rooms.ItemSillyPad
+				}
+				if p.SelectedRole == "" {
+					p.SelectedRole = rooms.RoleObserver
+				}
+				if p.SelectedModel == "" {
+					p.SelectedModel = rooms.ModelAlphanoid
+				}
+				if p.MoveDurTicks == 0 {
+					p.MoveDurTicks = rooms.MoveTicks
+				}
+				if p.NumWallbreakersLeft == 0 {
+					p.NumWallbreakersLeft = rooms.DEFAULT_WALLBREAKERS
+				}
+				if p.NumSillyPadsLeft == 0 {
+					p.NumSillyPadsLeft = rooms.DEFAULT_SILLY_PADS
+				}
+				if p.X == 0 && p.Y == 0 && p.FromX == 0 && p.FromY == 0 && p.ToX == 0 && p.ToY == 0 {
+					p.X = spawnX
+					p.Y = spawnY
+					p.FromX, p.FromY = spawnX, spawnY
+					p.ToX, p.ToY = spawnX, spawnY
+				}
+				p.FoundationIndex = 5
+				p.WallIndex = 6
+				p.GardenIndex = 7
 
-					room.Players[r.Client.PlayerID] = &rooms.PlayerState{
-						ID:     r.Client.PlayerID,
-						X:      spawnX,
-						Y:      spawnY,
-						Facing: rooms.Down,
-						Moving: false,
-						FromX:  spawnX, FromY: spawnY, ToX: spawnX, ToY: spawnY,
-						MoveStartTick:       room.Tick,
-						MoveDurTicks:        rooms.MoveTicks,
-						Mode:                rooms.Walking,
-						NumColorChangesLeft: 0,
-						NumWallsLeft:        0,
-						Score:               0,
-						SelectedItem:        rooms.ItemSillyPad,
-						NumWallbreakersLeft: rooms.DEFAULT_WALLBREAKERS,
-						NumSillyPadsLeft:    rooms.DEFAULT_SILLY_PADS,
-						FoundationIndex:     5,
-						WallIndex:           6,
-						GardenIndex:         7,
-					}
+				// Send an immediate authoritative state to newly registered client.
+				// This avoids join-time UI stale states (e.g., ready indicators).
+				if b, err := encodePlayerSnapshot(room); err == nil {
+					_ = trySend(r.Client, b)
+				}
+				if b, err := encodeTileMapSnapshotMsg(room); err == nil {
+					_ = trySend(r.Client, b)
 				}
 			case u := <-unregCh:
-				managedLeavePlayer(u.PlayerID)
 				if cl, ok := room.Clients[u.PlayerID]; ok {
-					close(cl.Send) // stop write goroutine
+					// Do not close Send here. A connected client can leave one room and join another.
+					// The channel is closed by wsHandler when the websocket actually disconnects.
+					_ = cl
 					delete(room.Clients, u.PlayerID)
 				}
-				delete(room.Players, u.PlayerID)
 			default:
 				break REGDRAIN
 			}
@@ -299,7 +324,7 @@ func runGameLoop(room *rooms.Room) {
 
 		// 6) Updaters. (tile, player, etc)
 		room.UpdatePhase()
-		managedSyncStatusFromPhase(room.Phase)
+		managedSyncStatusFromPhase(room.ID, room.Phase)
 		sillyPadRemoved, expiredSillyPads, tileChanged, destroyedTiles, Explosions := room.Map.Update(room.Tick)
 
 		if sillyPadRemoved {

@@ -14,12 +14,22 @@
   <div id="game-wrap">
     <canvas id="game" width="992" height="580"></canvas>
 
+    <div id="rooms-browser">
+      <div class="rooms-card">
+        <h2>Rooms</h2>
+        <div class="rooms-actions">
+          <input id="room-name-input" type="text" placeholder="Room name" />
+          <button id="create-room-btn">Create Room</button>
+          <button id="refresh-rooms-btn">Refresh</button>
+        </div>
+        <div id="rooms-list"></div>
+        <p id="rooms-error" class="rooms-error"></p>
+      </div>
+    </div>
+
     <div id="lobby">
       <div class="lobby-card">
-        <h1>Lobby</h1>
-        <p>Press Enter</p>
-
-        <div id="lobby">
+        <div class="lobby-inner">
           <div class="lobby-panel">
 
             <!-- LEFT COLUMN -->
@@ -45,7 +55,7 @@
             
                 <div class="btn-row">
                   <!-- randomColor is the default, so that's why it has the "selected" class to start -->
-                  <button class="randomColor role-btn selected" data-model="randomBot">Random color</button>
+                  <button class="randomColor role-btn" data-model="randomBot">Random color</button>
                   <button class="role-btn" data-model="observer">Observer</button>
                 </div>
               </div>
@@ -73,6 +83,7 @@
                 </div>
               </div>
               <div class="section ready-row">
+                <button id="lobby-back-btn" class="back-btn">Back</button>
                 <button class="ready-btn">Ready</button>
                 <!--<span class="ready-status">✔ waiting for others...</span> -->
               </div>
@@ -80,19 +91,19 @@
 
             <!-- RIGHT COLUMN -->
             <div class="lobby-col lobby-right">
-              <h3>Enter Name
-              <div class="row">
-                <input id="name-input" type="text" placeholder="Your name" />
-                <button>Set</button>
+              <div class="name-row">
+                <div class="label" id="current-player-name">Player</div>
+                <input id="name-input" class="text-input-name" type="text" placeholder="Your name" />
+                <button class="change-name" id="name-set-btn">Change name</button>
               </div>
-              </h3>
+
 
               <div class="section chat-section">
                 <div class="label">Chat</div>
                 <div class="chat-log"></div>
                 <div class="row">
-                  <input type="text" class="chat-input" placeholder="Type message..." />
-                  <button>Send</button>
+                  <input id="chat-input" type="text" class="chat-input text-input" placeholder="Type message..." />
+                  <button id="chat-send-btn">Send</button>
                 </div>
               </div>
               
@@ -101,6 +112,16 @@
           </div>
         </div>
 
+      </div>
+    </div>
+
+    <div id="solo-practice-dialog" class="solo-practice-dialog" style="display: none;">
+      <div class="solo-practice-card">
+        <p>Hello! You are creating a game with only one player. You can do this if you want to practice, or you can cancel if this was an error.</p>
+        <div class="solo-practice-actions">
+          <button id="solo-practice-cancel-btn">Cancel</button>
+          <button id="solo-practice-confirm-btn">Practice</button>
+        </div>
       </div>
     </div>
   </div>

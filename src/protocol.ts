@@ -31,6 +31,7 @@ export type SnapshotPlayer = {
   phase: Phase;
 
   id: number;
+  name?: string;
   x: number;
   y: number;
   facing: DirType;
@@ -56,6 +57,7 @@ export type SnapshotPlayer = {
 
   role: Role;
   model: Model;
+  ready: boolean;
 };
 
 export type SnapshotTile = {
@@ -145,4 +147,49 @@ export type ConfigMsg = {
 	cols: number;
   rows: number;
   configVersion: number;
+};
+
+export type RoomStatus = 'open' | 'starting' | 'in_game';
+
+export type RoomSummary = {
+  id: string;
+  name: string;
+  hostId: string;
+  playerCount: number;
+  maxPlayers: number;
+  status: RoomStatus;
+  createdAtUnix: number;
+};
+
+export type RoomsListOkMsg = {
+  type: 'rooms:list:ok';
+  rooms: RoomSummary[];
+  yourRoomId?: string;
+};
+
+export type RoomCreateOkMsg = {
+  type: 'room:create:ok';
+  roomId: string;
+};
+
+export type RoomJoinOkMsg = {
+  type: 'room:join:ok';
+  roomId: string;
+};
+
+export type RoomLeaveOkMsg = {
+  type: 'room:leave:ok';
+};
+
+export type RoomActionErrorMsg = {
+  type: 'room:error';
+  code?: string;
+  msg: string;
+};
+
+export type ChatMsg = {
+  type: 'chat';
+  playerId: number;
+  name: string;
+  text: string;
 };

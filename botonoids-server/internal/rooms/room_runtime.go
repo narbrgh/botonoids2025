@@ -32,7 +32,7 @@ func NewRoom(id string) *Room {
 	return &Room{
 		ID:         id,
 		Name:       "Room",
-		MaxPlayers: 4,
+		MaxPlayers: 6,
 		Status:     RoomStatusOpen,
 		CreatedAt:  now,
 		UpdatedAt:  now,

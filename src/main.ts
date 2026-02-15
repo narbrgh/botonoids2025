@@ -6,9 +6,10 @@ import Vector2 from './Vector2';
 import { resources } from './Resources';
 import TileMap from './TileMap';
 import Botonoid from './Botonoid';
-import type { PlayerSnapshotMsg, TileMapSnapshotMsg, TileChangeMsg , TileInitiateChangeMsg, TileChangeListMsg, CreateOrRemove, SillyPadMsg, WallbreakerMsg} from './protocol'
+import type { PlayerSnapshotMsg, TileMapSnapshotMsg, TileChangeMsg , TileInitiateChangeMsg, TileChangeListMsg, SillyPadMsg, WallbreakerMsg, RoomsListOkMsg, ChatMsg} from './protocol'
 import type { Phase , Role , Model } from './protocol';
 import {initLobbyUI, lobbyState } from "./lobby";
+import { initRoomsBrowserUI } from "./roomsBrowser";
 
 import HUD from "./hud";
 
@@ -30,6 +31,10 @@ import './style.css'
 const canvasEl = document.getElementById('game');
 if (!(canvasEl instanceof HTMLCanvasElement)) throw new Error('Canvas #game not found');
 const canvas = canvasEl;
+const gameWrap = document.getElementById('game-wrap');
+if (!(gameWrap instanceof HTMLElement)) throw new Error('Missing #game-wrap');
+gameWrap.style.width = `${canvas.width}px`;
+gameWrap.style.height = `${canvas.height}px`;
 
 const ctxEl = canvas.getContext('2d');
 if (!ctxEl) throw new Error('2D context not available');
@@ -52,9 +57,142 @@ const previewCtx = previewCtxEl;
 previewCtx.imageSmoothingEnabled = false
 
 const lobby = document.getElementById("lobby")!;
-initLobbyUI((e) => {
+const soloPracticeDialog = document.getElementById("solo-practice-dialog");
+const soloPracticeCancelBtn = document.getElementById("solo-practice-cancel-btn") as HTMLButtonElement | null;
+const soloPracticeConfirmBtn = document.getElementById("solo-practice-confirm-btn") as HTMLButtonElement | null;
+let joinedRoomId: string | null = null;
+let currentPhase: Phase = 'phaseLobby'
+let latestLobbyPlayers: PlayerSnapshotMsg["players"] = [];
+
+function requestRoomsList() {
+  net.sendCommand({ type: 'roomsList' });
+}
+
+const roomsBrowserUI = initRoomsBrowserUI({
+  onCreateRoom: (name, maxPlayers) => {
+    roomsBrowserUI.setError("");
+    net.sendCommand({ type: "roomCreate", name, maxPlayers });
+  },
+  onJoinRoom: (roomId) => {
+    roomsBrowserUI.setError("");
+    net.sendCommand({ type: "roomJoin", roomId });
+  },
+  onRefreshRooms: () => {
+    roomsBrowserUI.setError("");
+    requestRoomsList();
+  },
+});
+
+function applyOverlayState() {
+  roomsBrowserUI.setVisible(!joinedRoomId);
+  lobby.style.display = (joinedRoomId && currentPhase === 'phaseLobby') ? "flex" : "none";
+}
+
+function isActiveRole(role: Role | null | undefined): boolean {
+  return role !== null && role !== undefined && role !== "observer";
+}
+
+function getActivePlayerCountForReady(localRole: Role | null): number {
+  const localID = net.playerId;
+  let count = 0;
+  let sawLocal = false;
+
+  for (const p of latestLobbyPlayers) {
+    let role = p.role;
+    if (localID !== null && p.id === localID) {
+      sawLocal = true;
+      if (localRole !== null) role = localRole;
+    }
+    if (isActiveRole(role)) count++;
+  }
+
+  if (!sawLocal && isActiveRole(localRole)) {
+    count++;
+  }
+  return count;
+}
+
+function getReadyCountsAfterLocalReady(localReady: boolean): { readyCount: number; playerCount: number } {
+  const localID = net.playerId;
+  let readyCount = 0;
+  let playerCount = latestLobbyPlayers.length;
+  let sawLocal = false;
+
+  for (const p of latestLobbyPlayers) {
+    let ready = p.ready;
+    if (localID !== null && p.id === localID) {
+      sawLocal = true;
+      ready = localReady;
+    }
+    if (ready) readyCount++;
+  }
+
+  if (!sawLocal && joinedRoomId) {
+    playerCount++;
+    if (localReady) readyCount++;
+  }
+
+  return { readyCount, playerCount };
+}
+
+function promptSoloPractice(): Promise<boolean> {
+  if (!(soloPracticeDialog instanceof HTMLElement) || !soloPracticeCancelBtn || !soloPracticeConfirmBtn) {
+    return Promise.resolve(window.confirm("You are creating a one-player game. Press OK for practice or Cancel."));
+  }
+
+  soloPracticeDialog.style.display = "flex";
+  return new Promise<boolean>((resolve) => {
+    const cleanup = () => {
+      soloPracticeDialog.style.display = "none";
+      soloPracticeCancelBtn.removeEventListener("click", onCancel);
+      soloPracticeConfirmBtn.removeEventListener("click", onConfirm);
+    };
+    const onCancel = () => {
+      cleanup();
+      resolve(false);
+    };
+    const onConfirm = () => {
+      cleanup();
+      resolve(true);
+    };
+
+    soloPracticeCancelBtn.addEventListener("click", onCancel);
+    soloPracticeConfirmBtn.addEventListener("click", onConfirm);
+  });
+}
+
+const lobbyUI = initLobbyUI(async (e) => {
   if (e.type === "ready") {
-        net.sendCommand({ type: 'ready', role: lobbyState.role, model: lobbyState.model });
+        if (!joinedRoomId) return;
+        if (e.ready && e.role !== "observer") {
+          const { readyCount, playerCount } = getReadyCountsAfterLocalReady(e.ready);
+          const allPlayersReady = playerCount > 0 && readyCount === playerCount;
+          if (!allPlayersReady) {
+            net.sendCommand({ type: 'ready', ready: e.ready, role: e.role, model: lobbyState.model });
+            return;
+          }
+          const activePlayers = getActivePlayerCountForReady(e.role);
+          if (activePlayers <= 1) {
+            const shouldPractice = await promptSoloPractice();
+            if (!shouldPractice) {
+              lobbyUI.setReadyState(false);
+              return;
+            }
+          }
+        }
+        net.sendCommand({ type: 'ready', ready: e.ready, role: e.role, model: lobbyState.model });
+  } else if (e.type === "role") {
+        if (!joinedRoomId) return;
+        net.sendCommand({ type: 'roleSelect', role: e.role });
+  } else if (e.type === "name") {
+        if (!joinedRoomId) return;
+        net.sendCommand({ type: 'name', name: e.name });
+  } else if (e.type === "chat") {
+        if (!joinedRoomId) return;
+        net.sendCommand({ type: 'chat', text: e.text });
+  } else if (e.type === "back") {
+        if (!joinedRoomId) return;
+        net.sendCommand({ type: 'roomLeave' });
   }
 });
 
@@ -103,7 +241,9 @@ const getEstimatedTick = clock.estimatedTick.bind(clock);
 //const tileMap = new TileMap({cols, rows, tileSize: TILE_SIZE, tileSprite, getEstimatedTick });
 
 // ------ Controllers ------
-const p1 = new KeyboardController(P2_KEYS); // TODO make it make sense. currently lazily using P2_KEYS because those are arrow keys, instead of changing the file
+const p1 = new KeyboardController(P2_KEYS, window, {
+  isEnabled: () => joinedRoomId !== null && currentPhase === 'phasePlaying',
+}); // TODO make it make sense. currently lazily using P2_KEYS because those are arrow keys, instead of changing the file
 
 // ----- MAP of players ----
 
@@ -112,7 +252,6 @@ const botsById = new Map<number, Botonoid>();
 const net = new NetClient();
 net.connect();
 
-let currentPhase: Phase = 'phaseLobby'
 let prevPhase: Phase = currentPhase;
 
 function handlePhaseChange(next: Phase) {
@@ -124,9 +263,70 @@ function handlePhaseChange(next: Phase) {
   currentPhase = next;
 }
 
+net.onHello = () => {
+  if (net.playerId !== null) {
+    lobbyUI.setName(`Player ${net.playerId}`);
+  }
+  requestRoomsList();
+};
+
+net.onRoomsList = (m: RoomsListOkMsg) => {
+  joinedRoomId = m.yourRoomId ?? null;
+  if (joinedRoomId) {
+    const room = m.rooms.find((r) => r.id === joinedRoomId);
+    if (room) lobbyUI.setRoomName(room.name);
+  } else {
+    lobbyUI.setRoomName("Lobby");
+  }
+  roomsBrowserUI.setRooms(m.rooms, joinedRoomId);
+  applyOverlayState();
+};
+
+net.onRoomCreateOk = (m) => {
+  joinedRoomId = m.roomId;
+  lobbyUI.resetSelection();
+  roomsBrowserUI.setError("");
+  requestRoomsList();
+  applyOverlayState();
+};
+
+net.onRoomJoinOk = (m) => {
+  joinedRoomId = m.roomId;
+  lobbyUI.resetSelection();
+  roomsBrowserUI.setError("");
+  requestRoomsList();
+  applyOverlayState();
+};
+
+net.onRoomLeaveOk = () => {
+  joinedRoomId = null;
+  lobbyUI.resetSelection();
+  roomsBrowserUI.setError("");
+  requestRoomsList();
+  applyOverlayState();
+};
+
+net.onRoomError = (m) => {
+  roomsBrowserUI.setError(m.msg);
+};
+
+net.onChat = (m: ChatMsg) => {
+  lobbyUI.appendChat(`[${m.name}] ${m.text}`);
+};
+
 net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
+  latestLobbyPlayers = s.players;
 
   currentPhase = s.phase;
+  lobbyUI.setPlayers(s.players);
+  const unavailable: Role[] = [];
+  for (const p of s.players) {
+    if (p.id === net.playerId) continue;
+    if (p.role === "goldBot" || p.role === "silverBot" || p.role === "whiteBot" || p.role === "blackBot") {
+      unavailable.push(p.role);
+    }
+  }
+  lobbyUI.setRoleAvailability(unavailable);
   const receivedAtMs = performance.now()
   const seen = new Set<number>();
   const ticksLeft = Math.max(0, s.phaseEndsAtTick - s.tick);
@@ -290,9 +490,12 @@ function update(dt: number) {
 
   switch (currentPhase) {
     case 'phaseLobby': {
+      if (!joinedRoomId) break;
       //only allow "ready" on Enter. no other commands
       if (p1.consumeCommands().some(c => c.type === 'actionDown')) {
-        net.sendCommand({ type: 'ready', role: lobbyState.role, model: lobbyState.model });
+        if (lobbyState.role) {
+          net.sendCommand({ type: 'ready', ready: true, role: lobbyState.role, model: lobbyState.model });
+        }
       }
       break;
     } //end if case phaselobby
@@ -320,8 +523,8 @@ function render() {
   ctx.fillStyle = '#313642ff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  //turn on or off the lobby GUI depending on current phase
-  lobby.style.display = (currentPhase === 'phaseLobby') ? "flex" : "none";
+  //turn on or off room browser and lobby
+  applyOverlayState();
 
   switch (currentPhase) {
     case 'phaseLobby': {
@@ -329,6 +532,8 @@ function render() {
           previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
           let roleToSend = lobbyState.role;
           let modelToSend = lobbyState.model;
+
+          if (!roleToSend) break;
 
           if (roleToSend == "observer") {
             //TODO draw observer here

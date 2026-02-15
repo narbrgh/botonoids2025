@@ -54,7 +54,8 @@ type ClientMsg struct {
 // ------role can be gold, white, silver, or black bot. Future: observer -------
 
 type ReadyCmd struct {
-	Type  string      `json:"type"`  // "ready"
+	Type  string      `json:"type"` // "ready"
+	Ready bool        `json:"ready"`
 	Role  rooms.Role  `json:"role"`  // RoleGoldBot etc
 	Model rooms.Model `json:"model"` // ModelAlphanoid etc
 }
@@ -149,6 +150,70 @@ func decodeInputCmd(raw json.RawMessage) (InputCmd, error) {
 	return cmd, err
 }
 
+type RoomsListCmd struct {
+	Type string `json:"type"`
+}
+
+type RoomCreateCmd struct {
+	Type       string `json:"type"`
+	Name       string `json:"name"`
+	MaxPlayers int    `json:"maxPlayers"`
+}
+
+func decodeRoomCreateCmd(raw json.RawMessage) (RoomCreateCmd, error) {
+	var cmd RoomCreateCmd
+	err := json.Unmarshal(raw, &cmd)
+	return cmd, err
+}
+
+type RoomJoinCmd struct {
+	Type   string `json:"type"`
+	RoomID string `json:"roomId"`
+}
+
+func decodeRoomJoinCmd(raw json.RawMessage) (RoomJoinCmd, error) {
+	var cmd RoomJoinCmd
+	err := json.Unmarshal(raw, &cmd)
+	return cmd, err
+}
+
+type RoomLeaveCmd struct {
+	Type string `json:"type"`
+}
+
+type RoleSelectCmd struct {
+	Type string     `json:"type"`
+	Role rooms.Role `json:"role"`
+}
+
+func decodeRoleSelectCmd(raw json.RawMessage) (RoleSelectCmd, error) {
+	var cmd RoleSelectCmd
+	err := json.Unmarshal(raw, &cmd)
+	return cmd, err
+}
+
+type NameCmd struct {
+	Type string `json:"type"`
+	Name string `json:"name"`
+}
+
+func decodeNameCmd(raw json.RawMessage) (NameCmd, error) {
+	var cmd NameCmd
+	err := json.Unmarshal(raw, &cmd)
+	return cmd, err
+}
+
+type ChatCmd struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+func decodeChatCmd(raw json.RawMessage) (ChatCmd, error) {
+	var cmd ChatCmd
+	err := json.Unmarshal(raw, &cmd)
+	return cmd, err
+}
+
 type PlayerSnapshotMsg struct {
 	Type            string               `json:"type"` // "playerSnapshot"
 	Tick            uint64               `json:"tick"`
@@ -201,6 +266,13 @@ type TileInitiateChangeMsg struct {
 	ToIndex             uint8  `json:"toIndex"`
 	TileChangeStartTick uint64 `json:"tileChangeStartTick"`
 	TileChangeDurTicks  uint64 `json:"tileChangeDurTicks"`
+}
+
+type ChatMsg struct {
+	Type     string `json:"type"`
+	PlayerID int    `json:"playerId"`
+	Name     string `json:"name"`
+	Text     string `json:"text"`
 }
 
 // helper function to encode once

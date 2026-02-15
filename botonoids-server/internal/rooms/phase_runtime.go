@@ -39,14 +39,16 @@ func (r *Room) allReady() bool {
 	counts := map[Role]int{RoleGoldBot: 0, RoleSilverBot: 0, RoleWhiteBot: 0, RoleBlackBot: 0}
 
 	for _, p := range r.Players {
-		if p.Ready {
-			ready++
-			p.SetSpecialTilesBasedOnRole()
+		// Every connected player must click ready (including observers).
+		if !p.Ready {
+			return false
 		}
+		ready++
 		if p.SelectedRole != RoleObserver {
 			activePlayers++
+			p.SetSpecialTilesBasedOnRole()
+			counts[p.SelectedRole]++
 		}
-		counts[p.SelectedRole]++
 	}
 	//return false if any single color has more than one player
 	if counts[RoleGoldBot] > 1 || counts[RoleSilverBot] > 1 || counts[RoleWhiteBot] > 1 || counts[RoleBlackBot] > 1 {

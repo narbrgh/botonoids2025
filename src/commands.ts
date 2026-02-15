@@ -11,4 +11,11 @@ export type Command =
     | { type: 'actionUp' }
     | { type: 'changeItem' }
     | { type: 'useItem'}
-    | { type: 'ready'; role: Role ; model: Model}
+    | { type: 'ready'; ready: boolean; role: Role ; model: Model}
+    | { type: 'roomsList' }
+    | { type: 'roomCreate'; name: string; maxPlayers: number }
+    | { type: 'roomJoin'; roomId: string }
+    | { type: 'roomLeave' }
+    | { type: 'roleSelect'; role: Role }
+    | { type: 'name'; name: string }
+    | { type: 'chat'; text: string }

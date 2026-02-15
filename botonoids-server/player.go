@@ -3,6 +3,7 @@ package main
 import (
 	"botonoids-server/internal/rooms"
 	"encoding/json"
+	"strings"
 )
 
 // APPLY QUEUED CMD TO STATE
@@ -17,20 +18,129 @@ func applyQueuedCmdToRoom(room *rooms.Room, qc QueuedCmd) {
 		return
 	}
 
+	switch typ {
+	case "name":
+		cmd, err := decodeNameCmd(qc.Cmd)
+		if err != nil {
+			return
+		}
+		setPlayerName(qc.PlayerID, cmd.Name)
+		p.Name = getPlayerName(qc.PlayerID)
+		return
+	case "chat":
+		cmd, err := decodeChatCmd(qc.Cmd)
+		if err != nil {
+			return
+		}
+		text := strings.TrimSpace(cmd.Text)
+		if text == "" {
+			return
+		}
+		if len(text) > 180 {
+			text = text[:180]
+		}
+		msg := ChatMsg{
+			Type:     "chat",
+			PlayerID: qc.PlayerID,
+			Name:     getPlayerName(qc.PlayerID),
+			Text:     text,
+		}
+		if b, err := json.Marshal(msg); err == nil {
+			broadcast(room, b)
+		}
+		return
+	}
+
+	isColorRole := func(role rooms.Role) bool {
+		return role == rooms.RoleGoldBot || role == rooms.RoleSilverBot || role == rooms.RoleWhiteBot || role == rooms.RoleBlackBot
+	}
+	releaseRole := func(ownerID int, role rooms.Role) {
+		if isColorRole(role) {
+			// Clear reservation only if no other player still owns this role.
+			for pid, other := range room.Players {
+				if pid == ownerID {
+					continue
+				}
+				if other.SelectedRole == role {
+					room.RoleTaken[role] = true
+					return
+				}
+			}
+			room.RoleTaken[role] = false
+		}
+	}
+	tryClaimRole := func(claimantID int, role rooms.Role) bool {
+		if !isColorRole(role) {
+			return true
+		}
+		// Use actual ownership as source of truth; RoleTaken can drift.
+		for pid, other := range room.Players {
+			if pid == claimantID {
+				continue
+			}
+			if other.SelectedRole == role {
+				return false
+			}
+		}
+		room.RoleTaken[role] = true
+		return true
+	}
+
 	if room.Phase != rooms.PhasePlaying {
+		if typ == "roleSelect" {
+			cmd, err := decodeRoleSelectCmd(qc.Cmd)
+			if err != nil {
+				return
+			}
+
+			roleChanged := p.SelectedRole != cmd.Role
+			if roleChanged {
+				releaseRole(qc.PlayerID, p.SelectedRole)
+				if !tryClaimRole(qc.PlayerID, cmd.Role) {
+					if cl, ok := room.Clients[qc.PlayerID]; ok {
+						sendJSON(cl, ServerMsg{Type: "roleInvalid", Msg: "role taken"})
+					}
+					return
+				}
+			} else if isColorRole(cmd.Role) && !room.RoleTaken[cmd.Role] {
+				// If player already selected this color earlier, don't reject their ready.
+				// Reconcile reservation bit when it drifted.
+				room.RoleTaken[cmd.Role] = true
+			}
+
+			p.SelectedRole = cmd.Role
+			if roleChanged && p.Ready {
+				p.Ready = false
+				managedSetPlayerReady(qc.PlayerID, false)
+			}
+			return
+		}
+
 		if typ == "ready" {
 			cmd, err := decodeReadyCmd(qc.Cmd)
 			if err != nil {
 				return
 			}
 
-			if room.RoleTaken[cmd.Role] && cmd.Role != rooms.RoleObserver && cmd.Role != rooms.RoleRandomBot {
+			if !cmd.Ready {
+				p.Ready = false
+				releaseRole(qc.PlayerID, p.SelectedRole)
+				p.SelectedRole = rooms.RoleObserver
+				managedSetPlayerReady(qc.PlayerID, false)
+				return
+			}
+
+			if p.SelectedRole != cmd.Role {
+				releaseRole(qc.PlayerID, p.SelectedRole)
+			}
+
+			if !tryClaimRole(qc.PlayerID, cmd.Role) {
 				if cl, ok := room.Clients[qc.PlayerID]; ok {
 					sendJSON(cl, ServerMsg{Type: "roleInvalid", Msg: "role taken"})
 				}
 				return
 			}
-			room.RoleTaken[cmd.Role] = true
+
 			p.Ready = true
 			p.SelectedRole = cmd.Role
 			p.SelectedModel = cmd.Model

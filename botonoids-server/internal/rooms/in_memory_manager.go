@@ -62,7 +62,7 @@ func (m *InMemoryManager) CreateRoom(_ context.Context, actor PlayerRef, req Cre
 
 	maxPlayers := req.MaxPlayers
 	if maxPlayers < 2 || maxPlayers > 8 {
-		maxPlayers = 4
+		maxPlayers = 6
 	}
 
 	now := m.nowFn()
@@ -77,7 +77,7 @@ func (m *InMemoryManager) CreateRoom(_ context.Context, actor PlayerRef, req Cre
 	if convErr != nil {
 		return nil, &AppError{Code: ErrInvalidRequest, Message: "player id must be numeric"}
 	}
-	room.Players[actorID] = &PlayerState{ID: actorID, Ready: false}
+	room.Players[actorID] = &PlayerState{ID: actorID, Name: actor.Name, Ready: false}
 
 	m.roomsByID[room.ID] = room
 	m.playerToRoom[actor.PlayerID] = room.ID
@@ -110,7 +110,7 @@ func (m *InMemoryManager) JoinRoom(_ context.Context, actor PlayerRef, req JoinR
 	if convErr != nil {
 		return nil, &AppError{Code: ErrInvalidRequest, Message: "player id must be numeric"}
 	}
-	room.Players[actorID] = &PlayerState{ID: actorID, Ready: false}
+	room.Players[actorID] = &PlayerState{ID: actorID, Name: actor.Name, Ready: false}
 	m.playerToRoom[actor.PlayerID] = room.ID
 	room.UpdatedAt = m.nowFn()
 	return cloneRoom(room), nil
@@ -236,6 +236,19 @@ func (m *InMemoryManager) GetRoom(_ context.Context, roomID string) (*Room, *App
 		return nil, &AppError{Code: ErrRoomNotFound, Message: "room not found"}
 	}
 	return cloneRoom(room), nil
+}
+
+// GetRoomRef returns the underlying in-memory room pointer.
+// Callers must coordinate concurrent mutations.
+func (m *InMemoryManager) GetRoomRef(roomID string) (*Room, *AppError) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	room, ok := m.roomsByID[roomID]
+	if !ok {
+		return nil, &AppError{Code: ErrRoomNotFound, Message: "room not found"}
+	}
+	return room, nil
 }
 
 func (m *InMemoryManager) toRoomSummaryLocked(room *Room) RoomSummary {

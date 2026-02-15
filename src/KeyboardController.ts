@@ -11,6 +11,10 @@ export type KeyMap = {
     useItem: string[]; //edge-triggered
 };
 
+type KeyboardControllerOptions = {
+    isEnabled?: () => boolean;
+};
+
 export default class KeyboardController implements Controller {
     private down = new Set<string>();
     private pressed = new Set<string>();
@@ -21,11 +25,19 @@ export default class KeyboardController implements Controller {
     private queued: Command[] = [];
 
     private readonly keyMap: KeyMap;
+    private readonly isEnabled: () => boolean;
 
-    constructor(keyMap: KeyMap, target: Window = window) {
+    constructor(keyMap: KeyMap, target: Window = window, options: KeyboardControllerOptions = {}) {
         this.keyMap = keyMap;
+        this.isEnabled = options.isEnabled ?? (() => true);
 
         target.addEventListener('keydown', (e) => {
+            if (this.shouldIgnoreEventTarget(e.target)) return;
+            if (!this.isEnabled()) {
+                this.resetState();
+                return;
+            }
+
             const key = e.key;
 
             //prevent browser scrolling on arrows/space
@@ -51,8 +63,14 @@ export default class KeyboardController implements Controller {
         });
 
         target.addEventListener('keyup', (e) => {
+            if (this.shouldIgnoreEventTarget(e.target)) return;
             const key = e.key;
             this.down.delete(key);
+            if (!this.isEnabled()) {
+                const dir = this.keyToDir(key);
+                if (dir) this.dirStack = this.dirStack.filter(d => d !== dir);
+                return;
+            }
 
             if (this.keyMap.action.includes(key)) {
                 this.queued.push({ type: 'actionUp'})
@@ -66,10 +84,18 @@ export default class KeyboardController implements Controller {
     }
 
     getMoveIntent(): Dir | null {
+        if (!this.isEnabled()) {
+            this.resetState();
+            return null;
+        }
         return this.dirStack.length ? this.dirStack[this.dirStack.length - 1] : null;
     }
 
     consumeCommands(): Command[] {
+        if (!this.isEnabled()) {
+            this.resetState();
+            return [];
+        }
         const cmds: Command[] = [];
 
         //drain queued edge commands
@@ -106,5 +132,18 @@ export default class KeyboardController implements Controller {
         );
     }
 
+    private shouldIgnoreEventTarget(target: EventTarget | null): boolean {
+        if (!(target instanceof HTMLElement)) return false;
+        const tag = target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+        return target.isContentEditable;
+    }
+
+    private resetState(): void {
+        this.down.clear();
+        this.pressed.clear();
+        this.dirStack = [];
+        this.queued.length = 0;
+    }
 
 }

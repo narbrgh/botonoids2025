@@ -18,7 +18,7 @@ var (
 func managedPlayerRef(playerID int) rooms.PlayerRef {
 	return rooms.PlayerRef{
 		PlayerID: fmt.Sprintf("%d", playerID),
-		Name:     fmt.Sprintf("Player %d", playerID),
+		Name:     getPlayerName(playerID),
 		Ready:    false,
 	}
 }
@@ -36,7 +36,7 @@ func ensureManagedRoomFor(playerID int, actor rooms.PlayerRef) (string, error) {
 
 	room, appErr := roomManager.CreateRoom(context.Background(), actor, rooms.CreateRoomRequest{
 		Name:       "Default Room",
-		MaxPlayers: 4,
+		MaxPlayers: 6,
 	})
 	if appErr != nil {
 		return "", fmt.Errorf("%s: %s", appErr.Code, appErr.Message)
@@ -65,16 +65,71 @@ func managedJoinPlayer(playerID int) {
 	managedRoomMu.Unlock()
 }
 
-func managedLeavePlayer(playerID int) {
+func managedListRooms(playerID int) ([]rooms.RoomSummary, error) {
+	list, err := roomManager.ListRooms(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func managedCreateRoom(playerID int, name string, maxPlayers int) (string, *rooms.AppError) {
+	actor := managedPlayerRef(playerID)
+	room, appErr := roomManager.CreateRoom(context.Background(), actor, rooms.CreateRoomRequest{
+		Name:       name,
+		MaxPlayers: maxPlayers,
+	})
+	if appErr != nil {
+		return "", appErr
+	}
+	managedRoomMu.Lock()
+	managedPlayerRoom[playerID] = room.ID
+	managedRoomMu.Unlock()
+	return room.ID, nil
+}
+
+func managedJoinRoom(playerID int, roomID string) *rooms.AppError {
+	actor := managedPlayerRef(playerID)
+	_, appErr := roomManager.JoinRoom(context.Background(), actor, rooms.JoinRoomRequest{RoomID: roomID})
+	if appErr != nil {
+		return appErr
+	}
+	managedRoomMu.Lock()
+	managedPlayerRoom[playerID] = roomID
+	managedRoomMu.Unlock()
+	return nil
+}
+
+func managedLeaveRoom(playerID int) *rooms.AppError {
 	managedRoomMu.Lock()
 	roomID := managedPlayerRoom[playerID]
 	delete(managedPlayerRoom, playerID)
 	managedRoomMu.Unlock()
 
 	if roomID == "" {
-		return
+		return nil
 	}
-	_, _ = roomManager.LeaveRoom(context.Background(), managedPlayerRef(playerID), rooms.LeaveRoomRequest{RoomID: roomID})
+
+	_, appErr := roomManager.LeaveRoom(context.Background(), managedPlayerRef(playerID), rooms.LeaveRoomRequest{RoomID: roomID})
+	if appErr != nil {
+		return appErr
+	}
+
+	if _, stillThere := roomManager.GetRoom(context.Background(), roomID); stillThere != nil {
+		stopRoomRunner(roomID)
+	}
+
+	return nil
+}
+
+func managedGetPlayerRoomID(playerID int) string {
+	managedRoomMu.Lock()
+	defer managedRoomMu.Unlock()
+	return managedPlayerRoom[playerID]
+}
+
+func managedLeavePlayer(playerID int) {
+	_ = managedLeaveRoom(playerID)
 }
 
 func managedSetPlayerReady(playerID int, ready bool) {
@@ -91,14 +146,7 @@ func managedSetPlayerReady(playerID int, ready bool) {
 	})
 }
 
-func managedSyncStatusFromPhase(phase rooms.Phase) {
-	managedRoomMu.Lock()
-	roomID := managedRoomID
-	managedRoomMu.Unlock()
-	if roomID == "" {
-		return
-	}
-
+func managedSyncStatusFromPhase(roomID string, phase rooms.Phase) {
 	status := rooms.RoomStatusOpen
 	switch phase {
 	case rooms.PhaseCountdown:

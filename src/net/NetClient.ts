@@ -1,5 +1,5 @@
 import type { Command } from '../commands';
-import type { PlayerSnapshotMsg, TileMapSnapshotMsg, ConfigMsg, TileChangeMsg, TileInitiateChangeMsg, TileChangeListMsg, RoleInvalidMsg, SillyPadMsg, WallbreakerMsg} from '../protocol';
+import type { PlayerSnapshotMsg, TileMapSnapshotMsg, ConfigMsg, TileChangeMsg, TileInitiateChangeMsg, TileChangeListMsg, RoleInvalidMsg, SillyPadMsg, WallbreakerMsg, RoomsListOkMsg, RoomCreateOkMsg, RoomJoinOkMsg, RoomLeaveOkMsg, RoomActionErrorMsg, ChatMsg } from '../protocol';
 
 type HelloMsg = { type: 'hello'; playerId: number; msg?: string };
 
@@ -18,7 +18,7 @@ export default class NetClient {
       //     }
  
   private handlers = [
-    { guard: this.isHelloMsg, handle: (m: HelloMsg) => { this.playerId = m.playerId; } },
+    { guard: this.isHelloMsg, handle: (m: HelloMsg) => { this.playerId = m.playerId; this.onHello?.(m); } },
     { guard: this.isPlayerSnapshotMsg, handle: (m: PlayerSnapshotMsg) => { this.onPlayerSnapshot?.(m); } },
     { guard: this.isTileMapSnapshotMsg, handle: (m: TileMapSnapshotMsg) => { this.onTileMapSnapshot?.(m);}},
     { guard: this.isConfigMsg, handle: (m: ConfigMsg) => { this.config = m; this.onConfig?.(m); } },
@@ -28,6 +28,12 @@ export default class NetClient {
     { guard: this.isRoleInvalidMsg,  handle: (m: RoleInvalidMsg) => { this.onRoleInvalid?.(m); } },
     { guard: this.isSillyPadMsg, handle: (m: SillyPadMsg) => {this.onSillyPadMsg?.(m); } },
     { guard: this.isWallbreakerMsg, handle: (m: WallbreakerMsg) => {this.onWallbreakerMsg?.(m); } },
+    { guard: this.isRoomsListOkMsg, handle: (m: RoomsListOkMsg) => { this.onRoomsList?.(m); } },
+    { guard: this.isRoomCreateOkMsg, handle: (m: RoomCreateOkMsg) => { this.onRoomCreateOk?.(m); } },
+    { guard: this.isRoomJoinOkMsg, handle: (m: RoomJoinOkMsg) => { this.onRoomJoinOk?.(m); } },
+    { guard: this.isRoomLeaveOkMsg, handle: (m: RoomLeaveOkMsg) => { this.onRoomLeaveOk?.(m); } },
+    { guard: this.isRoomActionErrorMsg, handle: (m: RoomActionErrorMsg) => { this.onRoomError?.(m); } },
+    { guard: this.isChatMsg, handle: (m: ChatMsg) => { this.onChat?.(m); } },
 
   ];
 
@@ -170,6 +176,42 @@ export default class NetClient {
      && typeof (x as any).playerId === 'number';
   }
 
+  private isRoomsListOkMsg(x: unknown): x is RoomsListOkMsg {
+    return typeof x === 'object' && x !== null
+      && (x as any).type === 'rooms:list:ok'
+      && Array.isArray((x as any).rooms);
+  }
+
+  private isRoomCreateOkMsg(x: unknown): x is RoomCreateOkMsg {
+    return typeof x === 'object' && x !== null
+      && (x as any).type === 'room:create:ok'
+      && typeof (x as any).roomId === 'string';
+  }
+
+  private isRoomJoinOkMsg(x: unknown): x is RoomJoinOkMsg {
+    return typeof x === 'object' && x !== null
+      && (x as any).type === 'room:join:ok'
+      && typeof (x as any).roomId === 'string';
+  }
+
+  private isRoomLeaveOkMsg(x: unknown): x is RoomLeaveOkMsg {
+    return typeof x === 'object' && x !== null
+      && (x as any).type === 'room:leave:ok';
+  }
+
+  private isRoomActionErrorMsg(x: unknown): x is RoomActionErrorMsg {
+    return typeof x === 'object' && x !== null
+      && (x as any).type === 'room:error'
+      && typeof (x as any).msg === 'string';
+  }
+
+  private isChatMsg(x: unknown): x is ChatMsg {
+    return typeof x === 'object' && x !== null
+      && (x as any).type === 'chat'
+      && typeof (x as any).name === 'string'
+      && typeof (x as any).text === 'string';
+  }
+
   //my convention: use s for snapshot, c for config, m for messge
   onPlayerSnapshot?: (s: PlayerSnapshotMsg) => void;
   onTileMapSnapshot?: (s: TileMapSnapshotMsg) => void;
@@ -180,6 +222,13 @@ export default class NetClient {
   onRoleInvalid?: (m: RoleInvalidMsg) => void;  
   onSillyPadMsg?: (m: SillyPadMsg) => void;
   onWallbreakerMsg?: (m: WallbreakerMsg) => void;
+  onHello?: (m: HelloMsg) => void;
+  onRoomsList?: (m: RoomsListOkMsg) => void;
+  onRoomCreateOk?: (m: RoomCreateOkMsg) => void;
+  onRoomJoinOk?: (m: RoomJoinOkMsg) => void;
+  onRoomLeaveOk?: (m: RoomLeaveOkMsg) => void;
+  onRoomError?: (m: RoomActionErrorMsg) => void;
+  onChat?: (m: ChatMsg) => void;
 
   sendCommand(cmd: Command) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;

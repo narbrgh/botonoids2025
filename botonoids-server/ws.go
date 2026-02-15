@@ -35,11 +35,8 @@ func sendJSON(cl *rooms.Client, v any) {
 	if err != nil {
 		return
 	}
-	// Non-blocking send (drop if client is slow)
-	select {
-	case cl.Send <- b:
-	default: //TODO later can add code for errors/drops; for now keep it simple
-	}
+	// Non-blocking send (drop if client is slow/closed).
+	_ = trySend(cl, b)
 }
 
 // ─────────────────────────────
@@ -61,10 +58,15 @@ func wsHandler(w http.ResponseWriter, r *http.Request) { // This func is called 
 	//NOTE: defer does not run until AFTER the function returns (Golang syntax)
 
 	playerID := int(atomic.AddInt32(&nextID, 1)) // Atomically increment nextID and return the new value. This guarantees unique player IDs even if two clients connect at the same time.
+	setPlayerName(playerID, defaultPlayerName(playerID))
 
 	// unregister should be deferred once, here
 	defer func() {
-		unregCh <- Unregister{PlayerID: playerID}
+		if roomID := managedGetPlayerRoomID(playerID); roomID != "" {
+			runtimeUnregisterClient(roomID, playerID)
+		}
+		managedLeavePlayer(playerID)
+		removePlayerName(playerID)
 	}()
 
 	client := &rooms.Client{
@@ -72,9 +74,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) { // This func is called 
 		Conn:     c,
 		Send:     make(chan []byte, 256),
 	}
-
-	// register client with the game loop
-	regCh <- Register{Client: client}
+	defer close(client.Send)
 
 	//  writer goroutine: send snapshots/msgs to the socket
 	go func() {
@@ -120,11 +120,22 @@ func wsHandler(w http.ResponseWriter, r *http.Request) { // This func is called 
 		}
 		log.Printf("[ws] got msg from player=%d type=%s seq = %d cmd = %s", playerID, m.Type, m.Seq, string(m.Cmd))
 
-		// Add the command to the "command queue" for the server to process once per "tick"
-		cmdCh <- QueuedCmd{
-			PlayerID: playerID,
-			Seq:      m.Seq,
-			Cmd:      m.Cmd,
+		if m.Type == "command" {
+			cmdType, err := peekCmdType(m.Cmd)
+			if err == nil {
+				if handleRoomBrowserCommand(client, playerID, cmdType, m.Cmd) {
+					continue
+				}
+			}
+		}
+
+		roomID := managedGetPlayerRoomID(playerID)
+		if roomID != "" {
+			runtimeRouteCommand(roomID, QueuedCmd{
+				PlayerID: playerID,
+				Seq:      m.Seq,
+				Cmd:      m.Cmd,
+			})
 		}
 
 		/* changing all write JSON calls to the sendJSON function (Gorilla Websockets doesn't want WriteJSON from multiple gofuncs, because if both arrive at once, it can cause issues)
@@ -135,5 +146,84 @@ func wsHandler(w http.ResponseWriter, r *http.Request) { // This func is called 
 		})*/
 		sendJSON(client, ServerMsg{Type: "ack", PlayerID: playerID, Msg: "got it"})
 
+	}
+}
+
+func trySend(cl *rooms.Client, msg []byte) (ok bool) {
+	defer func() {
+		if recover() != nil {
+			ok = false
+		}
+	}()
+
+	select {
+	case cl.Send <- msg:
+		return true
+	default:
+		return false
+	}
+}
+
+func handleRoomBrowserCommand(client *rooms.Client, playerID int, cmdType string, raw json.RawMessage) bool {
+	switch cmdType {
+	case "roomsList":
+		roomsList, err := managedListRooms(playerID)
+		if err != nil {
+			sendJSON(client, map[string]any{"type": "room:error", "msg": "failed to list rooms"})
+			return true
+		}
+		sendJSON(client, map[string]any{
+			"type":       "rooms:list:ok",
+			"rooms":      roomsList,
+			"yourRoomId": managedGetPlayerRoomID(playerID),
+		})
+		return true
+	case "roomCreate":
+		cmd, err := decodeRoomCreateCmd(raw)
+		if err != nil {
+			sendJSON(client, map[string]any{"type": "room:error", "msg": "invalid roomCreate payload"})
+			return true
+		}
+		roomID, appErr := managedCreateRoom(playerID, cmd.Name, cmd.MaxPlayers)
+		if appErr != nil {
+			sendJSON(client, map[string]any{"type": "room:error", "code": appErr.Code, "msg": appErr.Message})
+			return true
+		}
+		if err := runtimeRegisterClient(roomID, client); err != nil {
+			sendJSON(client, map[string]any{"type": "room:error", "msg": "failed to enter created room"})
+			return true
+		}
+		sendJSON(client, map[string]any{"type": "room:create:ok", "roomId": roomID})
+		return true
+	case "roomJoin":
+		cmd, err := decodeRoomJoinCmd(raw)
+		if err != nil {
+			sendJSON(client, map[string]any{"type": "room:error", "msg": "invalid roomJoin payload"})
+			return true
+		}
+		appErr := managedJoinRoom(playerID, cmd.RoomID)
+		if appErr != nil {
+			sendJSON(client, map[string]any{"type": "room:error", "code": appErr.Code, "msg": appErr.Message})
+			return true
+		}
+		if err := runtimeRegisterClient(cmd.RoomID, client); err != nil {
+			sendJSON(client, map[string]any{"type": "room:error", "msg": "failed to enter room"})
+			return true
+		}
+		sendJSON(client, map[string]any{"type": "room:join:ok", "roomId": cmd.RoomID})
+		return true
+	case "roomLeave":
+		if roomID := managedGetPlayerRoomID(playerID); roomID != "" {
+			runtimeUnregisterClient(roomID, playerID)
+		}
+		appErr := managedLeaveRoom(playerID)
+		if appErr != nil {
+			sendJSON(client, map[string]any{"type": "room:error", "code": appErr.Code, "msg": appErr.Message})
+			return true
+		}
+		sendJSON(client, map[string]any{"type": "room:leave:ok"})
+		return true
+	default:
+		return false
 	}
 }

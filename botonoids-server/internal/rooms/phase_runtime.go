@@ -134,6 +134,12 @@ func (r *Room) resetToLobby() {
 	}
 }
 
+// ForceResetToLobby allows runtime/controller code outside the rooms package
+// to move a room immediately back to lobby phase.
+func (r *Room) ForceResetToLobby() {
+	r.resetToLobby()
+}
+
 func (r *Room) enterResultsScreen() {
 	r.Phase = PhaseFinished
 	r.PhaseEndsAtTick = r.Tick + phaseCfg.FinishedDurTicks

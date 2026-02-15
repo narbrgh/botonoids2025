@@ -60,9 +60,17 @@ const lobby = document.getElementById("lobby")!;
 const soloPracticeDialog = document.getElementById("solo-practice-dialog");
 const soloPracticeCancelBtn = document.getElementById("solo-practice-cancel-btn") as HTMLButtonElement | null;
 const soloPracticeConfirmBtn = document.getElementById("solo-practice-confirm-btn") as HTMLButtonElement | null;
+const inGameMenuRoot = document.getElementById("in-game-menu-root");
+const inGameMenuToggleBtn = document.getElementById("in-game-menu-toggle-btn") as HTMLButtonElement | null;
+const inGameMenuPanel = document.getElementById("in-game-menu-panel") as HTMLElement | null;
+const inGameMenuQuitBtn = document.getElementById("in-game-menu-quit-btn") as HTMLButtonElement | null;
+const inGameMenuCloseBtn = document.getElementById("in-game-menu-close-btn") as HTMLButtonElement | null;
 let joinedRoomId: string | null = null;
 let currentPhase: Phase = 'phaseLobby'
 let latestLobbyPlayers: PlayerSnapshotMsg["players"] = [];
+let phaseEndsAtTick = 0;
+let goOverlayUntilMs = 0;
+let pauseMenuOpen = false;
 
 function requestRoomsList() {
   net.sendCommand({ type: 'roomsList' });
@@ -86,6 +94,15 @@ const roomsBrowserUI = initRoomsBrowserUI({
 function applyOverlayState() {
   roomsBrowserUI.setVisible(!joinedRoomId);
   lobby.style.display = (joinedRoomId && currentPhase === 'phaseLobby') ? "flex" : "none";
+  const showInGameMenu = joinedRoomId !== null && currentPhase === "phasePlaying";
+  if (inGameMenuRoot instanceof HTMLElement) {
+    inGameMenuRoot.style.display = showInGameMenu ? "flex" : "none";
+  }
+  if (!showInGameMenu) {
+    pauseMenuOpen = false;
+    if (inGameMenuPanel) inGameMenuPanel.style.display = "none";
+    if (inGameMenuToggleBtn) inGameMenuToggleBtn.style.display = "grid";
+  }
 }
 
 function isActiveRole(role: Role | null | undefined): boolean {
@@ -140,12 +157,42 @@ function promptSoloPractice(): Promise<boolean> {
     return Promise.resolve(window.confirm("You are creating a one-player game. Press OK for practice or Cancel."));
   }
 
+  const lobbyEl = document.getElementById("lobby") as (HTMLElement & { inert?: boolean }) | null;
+  const roomsBrowserEl = document.getElementById("rooms-browser") as (HTMLElement & { inert?: boolean }) | null;
+  const prevFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+  if (lobbyEl) lobbyEl.inert = true;
+  if (roomsBrowserEl) roomsBrowserEl.inert = true;
+
   soloPracticeDialog.style.display = "flex";
+  soloPracticeCancelBtn.focus();
+
   return new Promise<boolean>((resolve) => {
+    const focusables: HTMLButtonElement[] = [soloPracticeCancelBtn, soloPracticeConfirmBtn];
+    const onKeydown = (ev: KeyboardEvent) => {
+      if (ev.key === "Tab") {
+        ev.preventDefault();
+        const idx = focusables.indexOf(document.activeElement as HTMLButtonElement);
+        const nextIdx = ev.shiftKey
+          ? (idx <= 0 ? focusables.length - 1 : idx - 1)
+          : (idx + 1) % focusables.length;
+        focusables[nextIdx].focus();
+        return;
+      }
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        onCancel();
+      }
+    };
+
     const cleanup = () => {
       soloPracticeDialog.style.display = "none";
+      document.removeEventListener("keydown", onKeydown, true);
       soloPracticeCancelBtn.removeEventListener("click", onCancel);
       soloPracticeConfirmBtn.removeEventListener("click", onConfirm);
+      if (lobbyEl) lobbyEl.inert = false;
+      if (roomsBrowserEl) roomsBrowserEl.inert = false;
+      prevFocused?.focus();
     };
     const onCancel = () => {
       cleanup();
@@ -156,6 +203,7 @@ function promptSoloPractice(): Promise<boolean> {
       resolve(true);
     };
 
+    document.addEventListener("keydown", onKeydown, true);
     soloPracticeCancelBtn.addEventListener("click", onCancel);
     soloPracticeConfirmBtn.addEventListener("click", onConfirm);
   });
@@ -242,7 +290,7 @@ const getEstimatedTick = clock.estimatedTick.bind(clock);
 
 // ------ Controllers ------
 const p1 = new KeyboardController(P2_KEYS, window, {
-  isEnabled: () => joinedRoomId !== null && currentPhase === 'phasePlaying',
+  isEnabled: () => joinedRoomId !== null && currentPhase === 'phasePlaying' && !pauseMenuOpen,
 }); // TODO make it make sense. currently lazily using P2_KEYS because those are arrow keys, instead of changing the file
 
 // ----- MAP of players ----
@@ -251,6 +299,52 @@ const botsById = new Map<number, Botonoid>();
 
 const net = new NetClient();
 net.connect();
+
+function setInGameMenuOpen(open: boolean) {
+  pauseMenuOpen = open;
+  if (inGameMenuToggleBtn) {
+    inGameMenuToggleBtn.style.display = open ? "none" : "grid";
+  }
+  if (inGameMenuPanel) {
+    inGameMenuPanel.style.display = open ? "flex" : "none";
+  }
+  if (open) {
+    // Release any held movement on the server while menu is open.
+    net.sendCommand({ type: "input", dir: null });
+    lastDir = null;
+  }
+}
+
+if (inGameMenuToggleBtn) {
+  inGameMenuToggleBtn.addEventListener("click", () => {
+    setInGameMenuOpen(!pauseMenuOpen);
+  });
+}
+
+if (inGameMenuCloseBtn) {
+  inGameMenuCloseBtn.addEventListener("click", () => setInGameMenuOpen(false));
+}
+
+if (inGameMenuQuitBtn) {
+  inGameMenuQuitBtn.addEventListener("click", () => {
+    setInGameMenuOpen(false);
+    if (joinedRoomId) net.sendCommand({ type: "roomLeave" });
+  });
+}
+
+window.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (e.repeat) return;
+  if (!joinedRoomId) return;
+  if (currentPhase !== "phaseCountdown") return;
+  const target = e.target;
+  if (target instanceof HTMLElement) {
+    const tag = target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable) return;
+  }
+  e.preventDefault();
+  net.sendCommand({ type: "cancelCountdown" });
+});
 
 let prevPhase: Phase = currentPhase;
 
@@ -316,9 +410,15 @@ net.onChat = (m: ChatMsg) => {
 
 net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
   latestLobbyPlayers = s.players;
+  if (currentPhase === "phaseCountdown" && s.phase === "phasePlaying") {
+    goOverlayUntilMs = performance.now() + 700;
+  }
 
   currentPhase = s.phase;
+  phaseEndsAtTick = s.phaseEndsAtTick;
   lobbyUI.setPlayers(s.players);
+  const meFromSnapshot = (net.playerId === null) ? undefined : s.players.find((p) => p.id === net.playerId);
+  lobbyUI.setReadyState(!!meFromSnapshot?.ready);
   const unavailable: Role[] = [];
   for (const p of s.players) {
     if (p.id === net.playerId) continue;
@@ -596,10 +696,13 @@ function render() {
       const hudY = Y_DRAW_OFFSET + tileSize * rows
       hud.draw({x: 0, y: hudY, width: canvas.width, height: canvas.height - hudY, timeLeft: secondsLeft, botsById, localPlayerId: net.playerId, numActivePlayers, nowMs});
 
-      drawText(ctx, '3 2 1 GO', canvas.width/2, canvas.height/2, {
-        font: '400 88 px "Goldman"',
+      const sec = Math.max(1, Math.min(3, secondsLeft));
+      const countdownLabel = String(sec);
+
+      drawText(ctx, countdownLabel, canvas.width / 2, canvas.height / 2 - 10, {
+        font: '700 176px "Goldman"',
         stroke: '#000',
-        strokeWidth: 8,
+        strokeWidth: 12,
       });
       
       break;
@@ -615,6 +718,14 @@ function render() {
       // draw HUD
       const hudY = Y_DRAW_OFFSET + tileSize * rows
       hud.draw({x: 0, y: hudY, width: canvas.width, height: canvas.height - hudY, timeLeft: secondsLeft, botsById, localPlayerId: net.playerId, numActivePlayers, nowMs});
+
+      if (nowMs < goOverlayUntilMs) {
+        drawText(ctx, "Go!", canvas.width / 2, canvas.height / 2 - 10, {
+          font: '700 160px "Goldman"',
+          stroke: '#000',
+          strokeWidth: 12,
+        });
+      }
     
       break;
     }

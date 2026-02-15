@@ -19,3 +19,4 @@ export type Command =
     | { type: 'roleSelect'; role: Role }
     | { type: 'name'; name: string }
     | { type: 'chat'; text: string }
+    | { type: 'cancelCountdown' }

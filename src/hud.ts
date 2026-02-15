@@ -155,11 +155,12 @@ export default class HUD {
 
         this.ctx.lineWidth = 5;
         this.ctx.strokeStyle = "#000000"
-        this.ctx.strokeText(`${timeLeft}`, x+ width - 50, y + height / 2);
+        const timeX = x + width - 90;
+        this.ctx.strokeText(`${timeLeft}`, timeX, y + height / 2);
 
         this.ctx.fillStyle = '#ffffff';
         if (timeLeft <= 30) {this.ctx.fillStyle = '#ff0000';}
-        this.ctx.fillText(`${timeLeft}`, x+ width - 50, y + height / 2);
+        this.ctx.fillText(`${timeLeft}`, timeX, y + height / 2);
 
         
 

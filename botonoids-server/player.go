@@ -87,6 +87,14 @@ func applyQueuedCmdToRoom(room *rooms.Room, qc QueuedCmd) {
 	}
 
 	if room.Phase != rooms.PhasePlaying {
+		if typ == "cancelCountdown" {
+			if room.Phase == rooms.PhaseCountdown {
+				room.ForceResetToLobby()
+				managedSyncStatusFromPhase(room.ID, room.Phase)
+			}
+			return
+		}
+
 		if typ == "roleSelect" {
 			cmd, err := decodeRoleSelectCmd(qc.Cmd)
 			if err != nil {

@@ -286,6 +286,10 @@ func (tm *TileMap) CreateSillyPad(x, y int, playerId int, startTick uint64, numT
 }
 
 func (tm *TileMap) CheckForCombo(x, y int, index uint8) int { //returns combo size
+	// tempTileMap is also used by other flood-fill systems (e.g. garden checks),
+	// so combo detection must always start from a clean map.
+	tm.ResetTempTileMap()
+
 	n := 1 //combo size
 
 	tm.tempTileMap[y][x] = true

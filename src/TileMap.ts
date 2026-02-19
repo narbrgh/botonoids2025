@@ -1,5 +1,5 @@
 import {Sprite} from './Sprite';
-import { BOMB_EXPLODE_TICKS, NUMBER_OF_COLORS, SERVER_TICK_HZ, X_DRAW_OFFSET, Y_DRAW_OFFSET} from './Constants';
+import { BOMB_EXPLODE_TICKS, NUMBER_OF_COLORS, SERVER_TICK_HZ, X_DRAW_OFFSET, Y_DRAW_OFFSET, GARDEN_GROW_SPEED } from './Constants';
 import Vector2 from './Vector2';
 import { mulberry32 } from './rng';
 import type { SnapshotTileMap, TileChangeListMsg, SillyPadMsg, WallbreakerMsg } from './protocol';
@@ -14,6 +14,14 @@ export type ColorChangeResult =
     changing: boolean;
     tileChangeStartTick: number;
     tileChangeDurTicks: number;
+}
+
+type GardenCreationAnimation = {
+    //used for "animating" the creation of a garden.
+    //This is visual only! (not like the destruction of a garden by a wallbreaker which takes some time and is server-side)
+    isActive: boolean;
+    gardenChangeTick: number;
+    prevIndex: number;
 }
 
 type SillyPadState = {
@@ -49,6 +57,7 @@ export default class TileMap {
     private readonly tileCount: number = 5; 
     private tiles: Tile[][];
     private sillyPads: SillyPadState[][];
+    private gardenAnimation: GardenCreationAnimation[][];
 
     private wallbreakers: Wallbreaker[];
     private explosions: Explosion[];
@@ -81,6 +90,7 @@ export default class TileMap {
         this.randomizeBoard();
 
         this.sillyPads = this.initializeSillyPads();
+        this.gardenAnimation = this.initializeGardenAnimationTiles();
         this.wallbreakers = [];
         this.explosions = [];
 
@@ -104,6 +114,24 @@ export default class TileMap {
                     ownerId: 0,
                     expiresAtTick: 0,
                     drawIndex: 0,
+                }
+                row.push(t);
+            }
+            out.push(row)
+        }
+        return out
+    }
+
+    private initializeGardenAnimationTiles(): GardenCreationAnimation[][] {
+        const out: GardenCreationAnimation[][] = [];
+        for (let r = 0; r < this.rows; r++) {
+            const row: GardenCreationAnimation[] = [];
+            for (let c = 0; c < this.cols; c++) {
+                const t: GardenCreationAnimation = {
+                    isActive: false,
+                    gardenChangeTick: 0,
+                    prevIndex: 0,
+                    
                 }
                 row.push(t);
             }
@@ -274,6 +302,37 @@ export default class TileMap {
         return false;
     }
 
+    isTileAFoundation(tilePos: Vector2) : boolean {
+        let index = this.getTileIndex(tilePos);
+        if (index === null) return false;
+        if (index == 5 || index == 8 || index == 11 || index == 14) {
+            return true
+        }
+        return false
+    }
+
+    isTileAWall(tilePos: Vector2) : boolean {
+        let index = this.getTileIndex(tilePos);
+        if (index === null) return false;
+        if (index == 6 || index == 9 || index == 12 || index == 15) {
+            return true
+        }
+        return false
+    }
+
+    isTileAGarden(tilePos: Vector2) : boolean {
+        let index = this.getTileIndex(tilePos);
+        if (index === null) return false;
+        if (index == 7 || index == 10 || index == 13 || index == 16) {
+            return true
+        }
+        return false
+    }
+
+    isIndexAGarden(index: number) : boolean {
+        return (index == 7 || index == 10 || index == 13 || index == 16) 
+    }
+
     getTileIndex(tilePos: Vector2): number | null {
         if (!this.inBounds(tilePos)) return null;
         return this.tiles[tilePos.y][tilePos.x].index;
@@ -281,6 +340,20 @@ export default class TileMap {
 
     setTileIndex(tilePos: Vector2, index: number): void {
         if (this.inBounds(tilePos)) {
+            this.tiles[tilePos.y][tilePos.x].index = index;
+        }
+        return;
+    }
+
+    setTileIndexWithDefaultLocation(tilePos: Vector2, index: number, x: number, y: number, nowMs: number): void {
+        if (this.isIndexAGarden(index)) {
+            const estTick = this.getEstimatedTick(nowMs)
+            const distance = Math.abs(x-tilePos.x) + Math.abs(y - tilePos.y)
+            this.gardenAnimation[tilePos.y][tilePos.x].isActive = true
+            this.gardenAnimation[tilePos.y][tilePos.x].gardenChangeTick = estTick + GARDEN_GROW_SPEED*distance
+            this.gardenAnimation[tilePos.y][tilePos.x].prevIndex = this.tiles[tilePos.y][tilePos.x].index
+            this.tiles[tilePos.y][tilePos.x].index = index;
+        } else if (this.inBounds(tilePos)) {
             this.tiles[tilePos.y][tilePos.x].index = index;
         }
         return;
@@ -386,6 +459,7 @@ export default class TileMap {
     }
 
     draw(ctx: CanvasRenderingContext2D, nowMs: number): void {
+        const estTick = this.getEstimatedTick(nowMs)
         // if the underlying resource isn't loaded yet, Sprite.drawImage won't draw it
         for (let r = 0; r < this.rows; r++) {
             for (let c = 0; c < this.cols; c++) {
@@ -393,19 +467,30 @@ export default class TileMap {
                 const x = c * this.tileSize + X_DRAW_OFFSET;
                 const y = r * this.tileSize + Y_DRAW_OFFSET;
 
+
                 //first draw the tiles
 
-                this.tileSprite.frame = index;
-                this.tileSprite.drawImage(ctx,x,y);
+                if (this.gardenAnimation[r][c].isActive) {
+                    if (estTick >= this.gardenAnimation[r][c].gardenChangeTick) {
+                        this.tileSprite.frame = index;
+                    } else {
+                        this.tileSprite.frame = this.gardenAnimation[r][c].prevIndex
+                    }
+                    this.tileSprite.drawImage(ctx,x,y);
 
-                if (this.tiles[r][c].changing) {
-                    let prevTileIndex = this.tiles[r][c].index - 1;
-                    if (prevTileIndex < 0) prevTileIndex = NUMBER_OF_COLORS - 1;
+                } else { //not a garden-animation tile
+                    this.tileSprite.frame = index;
+                    this.tileSprite.drawImage(ctx,x,y);
 
-                    this.tileSprite.frame = prevTileIndex;
+                    if (this.tiles[r][c].changing && !this.isTileAFoundation(new Vector2(c,r))) {
+                        let prevTileIndex = this.tiles[r][c].index - 1;
+                        if (prevTileIndex < 0) prevTileIndex = NUMBER_OF_COLORS - 1;
 
-                    const alpha = this.getAlpha(nowMs, this.tiles[r][c]);
-                    this.tileSprite.drawImageWithOpacity(ctx, x, y, alpha);
+                        this.tileSprite.frame = prevTileIndex;
+
+                        const alpha = this.getAlpha(nowMs, this.tiles[r][c]);
+                        this.tileSprite.drawImageWithOpacity(ctx, x, y, alpha);
+                    }
                 }
 
                 //now draw silly pad
@@ -476,9 +561,9 @@ export default class TileMap {
         this.tiles = s.tiles
     }
 
-    setAuthoritativeTileChangeList(s: TileChangeListMsg) {
+    setAuthoritativeTileChangeList(s: TileChangeListMsg, x: number, y: number, nowMs: number) {
         for (const t of s.tileChangeList) {
-            this.setTileIndex(new Vector2(t.x, t.y), t.index)
+            this.setTileIndexWithDefaultLocation(new Vector2(t.x, t.y), t.index, x, y, nowMs)
         }    
     }
 

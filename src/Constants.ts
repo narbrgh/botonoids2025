@@ -17,3 +17,5 @@ export const SERVER_TICK_HZ = 20; // TODO make this be "imported" from the autho
 export const SERVER_TICK_MS = 1000 / SERVER_TICK_HZ;
 
 export const BOMB_EXPLODE_TICKS = 0.1 * SERVER_TICK_HZ
+
+export const GARDEN_GROW_SPEED = 1; // how many ticks it takes for a garden to grow. higher is slower

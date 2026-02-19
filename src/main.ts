@@ -15,7 +15,7 @@ import HUD from "./hud";
 
 import {frameForBot, BOT_SHEET} from './botonoidSheet'
 
-import { TILE_SIZE, FRAME_SIZE, MOVE_DURATION_MS, Y_DRAW_OFFSET} from './Constants';
+import { TILE_SIZE, FRAME_SIZE, MOVE_DURATION_MS, Y_DRAW_OFFSET } from './Constants';
 
 import type { DirType, InputCmd } from './protocol';
 
@@ -24,6 +24,7 @@ import { P1_KEYS, P2_KEYS } from './keymaps';
 import ServerClock from './ServerClock';
 
 import './style.css'
+import AudioManager from './AudioManager';
 //import type { Command } from './commands';
 
 
@@ -41,6 +42,86 @@ if (!ctxEl) throw new Error('2D context not available');
 const ctx = ctxEl;
 
 ctx.imageSmoothingEnabled = false
+
+const audio = new AudioManager({ sfxPitchMin: 0.95, sfxPitchMax: 1.05 });
+const audioUrls = {
+  menu: "/audio/botonoids.ogg",
+  puzzler: "/audio/puzzler.ogg",
+  happy: "/audio/happy.ogg",
+  epic: "/audio/epic.ogg",
+  combo: "/sfx/combo.wav",
+  garden: "/sfx/garden.wav",
+  wall: "/sfx/wall.wav",
+  sillypadlay: "/sfx/sillypadlay.wav",
+  color: "/sfx/color.wav",
+  beep: "/sfx/beep.wav",
+  bang: "/sfx/bang.wav",
+  tick: "/sfx/tick.wav",
+} as const;
+
+audio.registerMusic("menu", audioUrls.menu, { loop: true, volume: 0.6 });
+audio.registerMusic("puzzler", audioUrls.puzzler, { loop: true, volume: 0.6 });
+audio.registerMusic("happy", audioUrls.happy, { loop: true, volume: 0.6 });
+audio.registerMusic("epic", audioUrls.epic, { loop: true, volume: 0.6 });
+audio.loadSfx("combo", audioUrls.combo);
+audio.loadSfx("garden", audioUrls.garden);
+audio.loadSfx("wall", audioUrls.wall);
+audio.loadSfx("sillypadlay", audioUrls.sillypadlay);
+audio.loadSfx("color", audioUrls.color);
+audio.loadSfx("beep", audioUrls.beep);
+audio.loadSfx("bang", audioUrls.bang);
+audio.loadSfx("tick", audioUrls.tick);
+
+const gameMusicKeys = ["puzzler", "happy", "epic"] as const;
+type GameMusicKey = typeof gameMusicKeys[number];
+let currentMusicKey: string | null = null;
+let selectedGameMusic: GameMusicKey | null = null;
+
+function chooseGameMusic(): GameMusicKey {
+  if (!selectedGameMusic) {
+    const idx = Math.floor(Math.random() * gameMusicKeys.length);
+    selectedGameMusic = gameMusicKeys[idx];
+  }
+  return selectedGameMusic;
+}
+
+function setMusic(key: string | null): void {
+  if (key === currentMusicKey) return;
+  if (currentMusicKey) audio.stopMusic(currentMusicKey);
+  currentMusicKey = key;
+  if (key) audio.playMusic(key);
+}
+
+function updateMusicState(): void {
+  const inMenu = !joinedRoomId || currentPhase === "phaseLobby";
+  const inCountdown = currentPhase === "phaseCountdown";
+  const inGame = currentPhase === "phasePlaying";
+
+  if (!inGame) {
+    selectedGameMusic = null;
+  }
+
+  if (inMenu) {
+    setMusic("menu");
+    return;
+  }
+  if (inCountdown) {
+    setMusic(null);
+    return;
+  }
+  if (inGame) {
+    setMusic(chooseGameMusic());
+    return;
+  }
+  setMusic(null);
+}
+
+const unlockAudioOnce = async () => {
+  await audio.unlock();
+  updateMusicState();
+};
+window.addEventListener("pointerdown", unlockAudioOnce, { once: true });
+window.addEventListener("keydown", unlockAudioOnce, { once: true });
 
 //Set up HUD
 let hud = new HUD(ctx);
@@ -297,6 +378,13 @@ const p1 = new KeyboardController(P2_KEYS, window, {
 
 const botsById = new Map<number, Botonoid>();
 
+
+// bools to keep track of which "numbers" have had their soundeffect played (used to make the countdown beeps)
+let playedCountdownNumber: boolean[] = [false, false, false, false]
+
+
+// ------ Net client -------
+
 const net = new NetClient();
 net.connect();
 
@@ -350,8 +438,8 @@ let prevPhase: Phase = currentPhase;
 
 function handlePhaseChange(next: Phase) {
   if (prevPhase === 'phaseLobby' && next === 'phaseCountdown') {
-    //update the frames for the botonoid sprite graphics based on role and model
-   //maybe?? 
+    //reset the bools for the countdown sound effects
+    playedCountdownNumber[0] = playedCountdownNumber[1] = playedCountdownNumber[2] = playedCountdownNumber[3] = false
   }
   prevPhase = next;
   currentPhase = next;
@@ -477,15 +565,57 @@ net.onTileMapSnapshot = (s: TileMapSnapshotMsg) => {
 };
 
 net.onTileChange = (m: TileChangeMsg) => {
-  if (tileMap) {tileMap.setTileIndex(new Vector2(m.x, m.y), m.index);}
+  if (!tileMap) return;
+  const pos = new Vector2(m.x, m.y);
+  tileMap.setTileIndex(pos, m.index);
+  if (tileMap.isTileAWall(pos)) {
+    audio.playSfx("wall", { volume: 0.5, pitchMin: 0.98, pitchMax: 1.03 });
+  }
 }
 
 net.onTileInitiateChange = (m: TileInitiateChangeMsg) => {
   if (tileMap) {tileMap.setAuthoritativeInitiateColorChange(new Vector2(m.x, m.y), m.toIndex, m.tileChangeStartTick, m.tileChangeDurTicks);}
+  audio.playSfx("tick", { volume: 0.6, pitchMin: 0.98, pitchMax: 1.02 });
 }
 
 net.onTileChangeList = (m: TileChangeListMsg) => {
-  if (tileMap) {tileMap.setAuthoritativeTileChangeList(m)}
+  const tm = tileMap;
+  const nowMs = performance.now();
+  if (!tm) return;
+
+  // Find source wall tile from this batch
+  const wallDelta = m.tileChangeList.find(t =>
+    t.index === 6 || t.index === 9 || t.index === 12 || t.index === 15
+  );
+
+  let defaultX = 0;
+  let defaultY = 0;
+
+  if (wallDelta) {
+    defaultX = wallDelta.x;
+    defaultY = wallDelta.y;
+  }
+  tm.setAuthoritativeTileChangeList(m, defaultX, defaultY, nowMs);
+
+  if (m.tileChangeList.length === 0) return;
+
+  const anyFoundation = m.tileChangeList.some(t => tm.isTileAFoundation(new Vector2(t.x, t.y)));
+  if (anyFoundation) {
+    audio.playSfx("combo", { volume: 0.9 });
+    return;
+  }
+
+  const anyGarden = m.tileChangeList.some(t => tm.isTileAGarden(new Vector2(t.x, t.y)));
+  if (anyGarden) {
+    audio.playSfx("garden", { volume: 0.85 });
+    
+    return;
+  }
+
+  const anyWall = m.tileChangeList.some(t => tm.isTileAWall(new Vector2(t.x, t.y)));
+  if (anyWall) {
+    audio.playSfx("wall", { volume: 0.5, pitchMin: 0.98, pitchMax: 1.03 });
+  }
 }
 
 net.onSillyPadMsg = (m: SillyPadMsg) => {
@@ -509,12 +639,18 @@ net.onSillyPadMsg = (m: SillyPadMsg) => {
   }
 
   if (tileMap) {tileMap.setSillyPadFromServerMessage(m, j)};
+  if (m.action === "create") {
+    audio.playSfx("sillypadlay", { volume: 0.85 });
+  }
 }
 
 net.onWallbreakerMsg = (m: WallbreakerMsg) => {
   console.log ("wallbreaker message received")
 
   if (tileMap) {tileMap.sendWallbreakerServerMessage(m)};
+  if (m.action === "create") {
+    audio.playSfx("item", { volume: 0.85 });
+  }
 }
 
 net.onConfig = (c) => {
@@ -587,6 +723,7 @@ function drivePlayer(controller: KeyboardController, player: Botonoid, dt: numbe
 
 function update(dt: number) {
   const nowMs = performance.now();
+  updateMusicState();
 
   switch (currentPhase) {
     case 'phaseLobby': {
@@ -599,7 +736,29 @@ function update(dt: number) {
       }
       break;
     } //end if case phaselobby
+    case 'phaseCountdown': {
+      if (!playedCountdownNumber[3]) { // if it hasn't played the sound for "3" yet, then play it. it should play first-thing
+        audio.playSfx("beep", {volume: 0.7, pitchMin: 1, pitchMax: 1})
+        playedCountdownNumber[3] = true
+      }
+      if (secondsLeft <= 2 && !playedCountdownNumber[2]) {
+        audio.playSfx("beep", {volume: 0.8, pitchMin: 1, pitchMax: 1})
+        playedCountdownNumber[2] = true
+      }
+      if (secondsLeft <= 1 && !playedCountdownNumber[1]) {
+        audio.playSfx("beep", {volume: 0.9, pitchMin: 1, pitchMax: 1})
+        playedCountdownNumber[1] = true
+      }
+
+
+
+      break;
+    }
     case 'phasePlaying': {
+      if (!playedCountdownNumber[0]) {
+        audio.playSfx("bang", {volume: 1, pitchMin: 1, pitchMax: 1})
+        playedCountdownNumber[0] = true
+      }
       for (const cmd of p1.consumeCommands()) net.sendCommand(cmd);
       const dir = p1.getMoveIntent();          // DirType | null
       if (dir !== lastDir) {

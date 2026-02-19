@@ -4,6 +4,7 @@ type RoomsBrowserHandlers = {
   onCreateRoom: (name: string, maxPlayers: number) => void;
   onJoinRoom: (roomId: string) => void;
   onRefreshRooms: () => void;
+  onOpenOptions: () => void;
 };
 
 export type RoomsBrowserController = {
@@ -18,9 +19,10 @@ export function initRoomsBrowserUI(handlers: RoomsBrowserHandlers): RoomsBrowser
   const roomNameInput = document.getElementById("room-name-input") as HTMLInputElement | null;
   const createRoomBtn = document.getElementById("create-room-btn") as HTMLButtonElement | null;
   const refreshRoomsBtn = document.getElementById("refresh-rooms-btn") as HTMLButtonElement | null;
+  const optionsBtn = document.getElementById("rooms-options-btn") as HTMLButtonElement | null;
   const roomsErrorEl = document.getElementById("rooms-error");
 
-  if (!root || !roomsListEl || !roomNameInput || !createRoomBtn || !refreshRoomsBtn || !roomsErrorEl) {
+  if (!root || !roomsListEl || !roomNameInput || !createRoomBtn || !refreshRoomsBtn || !optionsBtn || !roomsErrorEl) {
     throw new Error("rooms browser DOM is missing required elements");
   }
 
@@ -31,6 +33,10 @@ export function initRoomsBrowserUI(handlers: RoomsBrowserHandlers): RoomsBrowser
 
   refreshRoomsBtn.addEventListener("click", () => {
     handlers.onRefreshRooms();
+  });
+
+  optionsBtn.addEventListener("click", () => {
+    handlers.onOpenOptions();
   });
 
   return {

@@ -8,6 +8,7 @@ export type LobbyEvent =
 | {type: "role"; role: Role}
 | {type: "name"; name: string }
 | {type: "chat"; text: string }
+| {type: "options" }
 | {type: "back" };
 
 export type LobbyUIController = {
@@ -39,6 +40,7 @@ export function initLobbyUI(onEvent: (e: LobbyEvent) => void): LobbyUIController
     const chatInput = document.querySelector<HTMLInputElement>("#chat-input");
     const chatSendBtn = document.querySelector<HTMLButtonElement>("#chat-send-btn");
     const backBtn = document.querySelector<HTMLButtonElement>("#lobby-back-btn");
+    const optionsBtn = document.querySelector<HTMLButtonElement>("#lobby-options-btn");
     const chatLog = document.querySelector<HTMLDivElement>(".chat-log");
     const playerCards = Array.from(document.querySelectorAll<HTMLDivElement>(".players-grid .player-card"));
     const roomNameEl = document.querySelector<HTMLElement>("#lobby-room-name");
@@ -96,6 +98,10 @@ export function initLobbyUI(onEvent: (e: LobbyEvent) => void): LobbyUIController
 
     if (backBtn) {
         backBtn.addEventListener("click", () => onEvent({ type: "back" }));
+    }
+
+    if (optionsBtn) {
+        optionsBtn.addEventListener("click", () => onEvent({ type: "options" }));
     }
 
     if (readyBtn) {

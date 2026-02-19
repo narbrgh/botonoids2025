@@ -16,14 +16,25 @@
 
     <div id="rooms-browser">
       <div class="rooms-card">
-        <h2>Rooms</h2>
-        <div class="rooms-actions">
-          <input id="room-name-input" type="text" placeholder="Room name" />
-          <button id="create-room-btn">Create Room</button>
-          <button id="refresh-rooms-btn">Refresh</button>
+        <div class="rooms-title">Botonoids</div>
+        <div class="rooms-layout">
+          <div class="rooms-main-col">
+            <h2>Rooms</h2>
+            <div class="rooms-actions">
+              <input id="room-name-input" type="text" placeholder="Room name" />
+              <button id="create-room-btn">Create Room</button>
+              <button id="refresh-rooms-btn">Refresh</button>
+            </div>
+            <div id="rooms-list"></div>
+            <p id="rooms-error" class="rooms-error"></p>
+          </div>
+          <div class="rooms-side-col">
+            <button id="rooms-options-btn">Options</button>
+            <button id="rooms-how-to-play-btn" disabled>How to Play</button>
+            <button id="rooms-story-btn" disabled>Story</button>
+            <button id="rooms-credits-btn" disabled>Credits</button>
+          </div>
         </div>
-        <div id="rooms-list"></div>
-        <p id="rooms-error" class="rooms-error"></p>
       </div>
     </div>
 
@@ -84,6 +95,8 @@
               </div>
               <div class="section ready-row">
                 <button id="lobby-back-btn" class="back-btn">Back</button>
+                <button id="lobby-options-btn">Options</button>
+                <span class="ready-row-spacer" aria-hidden="true"></span>
                 <button class="ready-btn">Ready</button>
                 <!--<span class="ready-status">✔ waiting for others...</span> -->
               </div>
@@ -128,8 +141,50 @@
     <div id="in-game-menu-root" class="in-game-menu-root" style="display: none;">
       <button id="in-game-menu-toggle-btn" class="in-game-menu-toggle-btn" aria-label="Open menu">☰</button>
       <div id="in-game-menu-panel" class="in-game-menu-panel" style="display: none;">
+        <button id="in-game-menu-options-btn">Options</button>
         <button id="in-game-menu-quit-btn">Quit game</button>
         <button id="in-game-menu-close-btn">Close menu</button>
+      </div>
+    </div>
+
+    <div id="options-overlay" class="options-overlay" style="display: none;">
+      <div id="options-dialog" class="options-dialog" role="dialog" aria-modal="true" aria-labelledby="options-title">
+        <div class="options-header">
+          <h2 id="options-title">Options</h2>
+          <button id="options-close-btn" aria-label="Close options">Close</button>
+        </div>
+        <div class="options-tabs">
+          <button id="options-tab-controls-btn" class="selected">Controls</button>
+          <button id="options-tab-audio-btn">Audio</button>
+        </div>
+        <div id="options-controls-tab" class="options-tab-panel">
+          <div id="options-controls-warning" class="options-warning"></div>
+          <div id="options-controls-list" class="options-controls-list"></div>
+          <div class="options-footer-row">
+            <button id="options-controls-reset-btn">Reset Controls</button>
+          </div>
+        </div>
+        <div id="options-audio-tab" class="options-tab-panel" style="display: none;">
+          <div class="options-audio-row music-choice-row">
+            <span>In-Game Music</span>
+            <div id="options-music-choice-buttons" class="options-music-buttons">
+              <button id="options-music-btn-puzzler" data-choice="puzzler">Puzzler</button>
+              <button id="options-music-btn-happy" data-choice="happy">Happy</button>
+              <button id="options-music-btn-epic" data-choice="epic">Epic</button>
+              <button id="options-music-btn-random" data-choice="random">Random</button>
+            </div>
+          </div>
+          <div class="options-audio-row music-volume-row">
+            <label for="options-music-volume-range">Music Volume</label>
+            <input id="options-music-volume-range" type="range" min="0" max="100" step="1" />
+            <span id="options-music-volume-value">0%</span>
+          </div>
+          <div class="options-audio-row">
+            <label for="options-sfx-volume-range">SFX Volume</label>
+            <input id="options-sfx-volume-range" type="range" min="0" max="100" step="1" />
+            <span id="options-sfx-volume-value">0%</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>

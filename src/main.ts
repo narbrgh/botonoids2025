@@ -19,9 +19,15 @@ import { TILE_SIZE, FRAME_SIZE, MOVE_DURATION_MS, Y_DRAW_OFFSET } from './Consta
 
 import type { DirType, InputCmd } from './protocol';
 
-import KeyboardController from './KeyboardController';
-import { P1_KEYS, P2_KEYS } from './keymaps';
+import KeyboardController, { type KeyMap } from './KeyboardController';
+import { P2_KEYS } from './keymaps';
 import ServerClock from './ServerClock';
+import {
+  initOptionsOverlay,
+  type ControlsState,
+  type MusicChoice,
+  type RebindConflict,
+} from "./optionsOverlay";
 
 import './style.css'
 import AudioManager from './AudioManager';
@@ -71,11 +77,14 @@ audio.loadSfx("color", audioUrls.color);
 audio.loadSfx("beep", audioUrls.beep);
 audio.loadSfx("bang", audioUrls.bang);
 audio.loadSfx("tick", audioUrls.tick);
+audio.setMusicVolume(1);
+audio.setSfxVolume(1);
 
 const gameMusicKeys = ["puzzler", "happy", "epic"] as const;
 type GameMusicKey = typeof gameMusicKeys[number];
 let currentMusicKey: string | null = null;
 let selectedGameMusic: GameMusicKey | null = null;
+let selectedMusicChoice: MusicChoice = "random";
 
 function chooseGameMusic(): GameMusicKey {
   if (!selectedGameMusic) {
@@ -110,7 +119,7 @@ function updateMusicState(): void {
     return;
   }
   if (inGame) {
-    setMusic(chooseGameMusic());
+    setMusic(selectedMusicChoice === "random" ? chooseGameMusic() : selectedMusicChoice);
     return;
   }
   setMusic(null);
@@ -144,6 +153,7 @@ const soloPracticeConfirmBtn = document.getElementById("solo-practice-confirm-bt
 const inGameMenuRoot = document.getElementById("in-game-menu-root");
 const inGameMenuToggleBtn = document.getElementById("in-game-menu-toggle-btn") as HTMLButtonElement | null;
 const inGameMenuPanel = document.getElementById("in-game-menu-panel") as HTMLElement | null;
+const inGameMenuOptionsBtn = document.getElementById("in-game-menu-options-btn") as HTMLButtonElement | null;
 const inGameMenuQuitBtn = document.getElementById("in-game-menu-quit-btn") as HTMLButtonElement | null;
 const inGameMenuCloseBtn = document.getElementById("in-game-menu-close-btn") as HTMLButtonElement | null;
 let joinedRoomId: string | null = null;
@@ -152,6 +162,75 @@ let latestLobbyPlayers: PlayerSnapshotMsg["players"] = [];
 let phaseEndsAtTick = 0;
 let goOverlayUntilMs = 0;
 let pauseMenuOpen = false;
+let optionsOpen = false;
+let lastDir: DirType | null = null;
+
+type BindingAction = keyof KeyMap;
+const BINDING_ACTIONS: BindingAction[] = ["up", "down", "left", "right", "action", "changeItem", "useItem"];
+const DEFAULT_KEYMAP: KeyMap = cloneKeyMap(P2_KEYS);
+const playerKeyMap: KeyMap = cloneKeyMap(DEFAULT_KEYMAP);
+let controlLabels: ControlsState = keyMapToControlsState(playerKeyMap);
+
+function cloneKeyMap(map: KeyMap): KeyMap {
+  return {
+    up: [...map.up],
+    down: [...map.down],
+    left: [...map.left],
+    right: [...map.right],
+    action: [...map.action],
+    changeItem: [...map.changeItem],
+    useItem: [...map.useItem],
+  };
+}
+
+function keyMapToControlsState(map: KeyMap): ControlsState {
+  return {
+    up: map.up[0] ?? "ArrowUp",
+    down: map.down[0] ?? "ArrowDown",
+    left: map.left[0] ?? "ArrowLeft",
+    right: map.right[0] ?? "ArrowRight",
+    action: map.action[0] ?? " ",
+    changeItem: map.changeItem[0] ?? "Shift",
+    useItem: map.useItem[0] ?? "Control",
+  };
+}
+
+function normalizeBindingKey(key: string): string {
+  if (key === " ") return " ";
+  if (key.length === 1) return key.toLowerCase();
+  return key;
+}
+
+function variantsForBoundKey(key: string): string[] {
+  if (key === " ") return [" ", "Space"];
+  if (key.length === 1 && key.toLowerCase() !== key.toUpperCase()) {
+    return [key.toLowerCase(), key.toUpperCase()];
+  }
+  return [key];
+}
+
+let optionsOverlay: ReturnType<typeof initOptionsOverlay> | null = null;
+
+function openOptions(): void {
+  optionsOverlay?.setControls(controlLabels);
+  optionsOverlay?.setMusicChoice(selectedMusicChoice);
+  optionsOverlay?.setRebindConflict(findFirstBindingConflict(controlLabels));
+  optionsOverlay?.open();
+}
+
+function findFirstBindingConflict(state: ControlsState): RebindConflict | null {
+  const actions = BINDING_ACTIONS;
+  for (let i = 0; i < actions.length; i++) {
+    for (let j = i + 1; j < actions.length; j++) {
+      const a = actions[i];
+      const b = actions[j];
+      if (normalizeBindingKey(state[a]) === normalizeBindingKey(state[b])) {
+        return { action: a, conflictsWith: b, key: state[a] };
+      }
+    }
+  }
+  return null;
+}
 
 function requestRoomsList() {
   net.sendCommand({ type: 'roomsList' });
@@ -169,6 +248,72 @@ const roomsBrowserUI = initRoomsBrowserUI({
   onRefreshRooms: () => {
     roomsBrowserUI.setError("");
     requestRoomsList();
+  },
+  onOpenOptions: () => {
+    openOptions();
+  },
+});
+
+optionsOverlay = initOptionsOverlay({
+  controls: controlLabels,
+  musicChoice: selectedMusicChoice,
+  musicVolume: 1,
+  sfxVolume: 1,
+  onOpenChange: (open) => {
+    optionsOpen = open;
+    if (open) {
+      setInGameMenuOpen(false);
+      if (joinedRoomId !== null && currentPhase === "phasePlaying") {
+        net.sendCommand({ type: "input", dir: null });
+        lastDir = null;
+      }
+    } else {
+      optionsOverlay?.setRebindPending(null);
+      optionsOverlay?.setRebindConflict(null);
+    }
+  },
+  onApplyRebind: (action, key) => {
+    controlLabels = { ...controlLabels, [action]: key };
+    playerKeyMap[action] = variantsForBoundKey(key);
+    const conflict = findFirstBindingConflict(controlLabels);
+    optionsOverlay?.setControls(controlLabels);
+    optionsOverlay?.setRebindPending(null);
+    optionsOverlay?.setRebindConflict(conflict);
+    if (joinedRoomId !== null && currentPhase === "phasePlaying") {
+      net.sendCommand({ type: "input", dir: null });
+      lastDir = null;
+    }
+  },
+  onCancelRebind: () => {
+    optionsOverlay?.setRebindPending(null);
+    optionsOverlay?.setRebindConflict(findFirstBindingConflict(controlLabels));
+  },
+  onMusicChoiceChange: (choice) => {
+    selectedMusicChoice = choice;
+    optionsOverlay?.setMusicChoice(choice);
+    updateMusicState();
+  },
+  onMusicVolumeChange: (value) => {
+    audio.setMusicVolume(value);
+    optionsOverlay?.setMusicVolume(value);
+  },
+  onSfxVolumeChange: (value) => {
+    audio.setSfxVolume(value);
+    optionsOverlay?.setSfxVolume(value);
+  },
+  onResetControls: () => {
+    const defaults = cloneKeyMap(DEFAULT_KEYMAP);
+    for (const action of BINDING_ACTIONS) {
+      playerKeyMap[action] = [...defaults[action]];
+    }
+    controlLabels = keyMapToControlsState(playerKeyMap);
+    optionsOverlay?.setControls(controlLabels);
+    optionsOverlay?.setRebindPending(null);
+    optionsOverlay?.setRebindConflict(findFirstBindingConflict(controlLabels));
+    if (joinedRoomId !== null && currentPhase === "phasePlaying") {
+      net.sendCommand({ type: "input", dir: null });
+      lastDir = null;
+    }
   },
 });
 
@@ -319,6 +464,8 @@ const lobbyUI = initLobbyUI(async (e) => {
   } else if (e.type === "chat") {
         if (!joinedRoomId) return;
         net.sendCommand({ type: 'chat', text: e.text });
+  } else if (e.type === "options") {
+        openOptions();
   } else if (e.type === "back") {
         if (!joinedRoomId) return;
         net.sendCommand({ type: 'roomLeave' });
@@ -370,9 +517,9 @@ const getEstimatedTick = clock.estimatedTick.bind(clock);
 //const tileMap = new TileMap({cols, rows, tileSize: TILE_SIZE, tileSprite, getEstimatedTick });
 
 // ------ Controllers ------
-const p1 = new KeyboardController(P2_KEYS, window, {
-  isEnabled: () => joinedRoomId !== null && currentPhase === 'phasePlaying' && !pauseMenuOpen,
-}); // TODO make it make sense. currently lazily using P2_KEYS because those are arrow keys, instead of changing the file
+const p1 = new KeyboardController(playerKeyMap, window, {
+  isEnabled: () => joinedRoomId !== null && currentPhase === 'phasePlaying' && !pauseMenuOpen && !optionsOpen,
+});
 
 // ----- MAP of players ----
 
@@ -413,6 +560,13 @@ if (inGameMenuCloseBtn) {
   inGameMenuCloseBtn.addEventListener("click", () => setInGameMenuOpen(false));
 }
 
+if (inGameMenuOptionsBtn) {
+  inGameMenuOptionsBtn.addEventListener("click", () => {
+    setInGameMenuOpen(false);
+    openOptions();
+  });
+}
+
 if (inGameMenuQuitBtn) {
   inGameMenuQuitBtn.addEventListener("click", () => {
     setInGameMenuOpen(false);
@@ -423,6 +577,7 @@ if (inGameMenuQuitBtn) {
 window.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (e.repeat) return;
+  if (optionsOpen) return;
   if (!joinedRoomId) return;
   if (currentPhase !== "phaseCountdown") return;
   const target = e.target;
@@ -668,8 +823,6 @@ net.onRoleInvalid = (m) => {
   console.log('role invalid', m);
   //TODO add invalid role selection code
 }
-
-let lastDir: DirType | null = null;
 
 new GameLoop(update, render).start();
 

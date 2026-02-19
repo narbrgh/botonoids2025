@@ -350,7 +350,7 @@ export default class TileMap {
             const estTick = this.getEstimatedTick(nowMs)
             const distance = Math.abs(x-tilePos.x) + Math.abs(y - tilePos.y)
             this.gardenAnimation[tilePos.y][tilePos.x].isActive = true
-            this.gardenAnimation[tilePos.y][tilePos.x].gardenChangeTick = estTick + GARDEN_GROW_SPEED*distance
+            this.gardenAnimation[tilePos.y][tilePos.x].gardenChangeTick = estTick + distance/GARDEN_GROW_SPEED
             this.gardenAnimation[tilePos.y][tilePos.x].prevIndex = this.tiles[tilePos.y][tilePos.x].index
             this.tiles[tilePos.y][tilePos.x].index = index;
         } else if (this.inBounds(tilePos)) {

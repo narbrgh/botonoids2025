@@ -32,7 +32,8 @@ func broadcast(room *rooms.Room, msg []byte) {
 	}
 }
 
-func CheckForWallBuild(room *rooms.Room, p *rooms.PlayerState) {
+func CheckForWallBuild(room *rooms.Room, p *rooms.PlayerState) bool {
+	wasGardenBuilt := false
 	if p.ActionPressed == true {
 		result := room.Map.TryToBuildWall(p.X, p.Y, p.FoundationIndex, p.WallIndex, p.ID) //TODO use foundation index and wallindex
 		//result := room.Map.TryToBuildWall(p.X, p.Y, 5, 6, p.ID)
@@ -52,6 +53,7 @@ func CheckForWallBuild(room *rooms.Room, p *rooms.PlayerState) {
 				//numFoundationsDestroyed++
 				p.NumWallsLeft -= numFoundationsDestroyed
 				p.Score += numGardensBuilt * rooms.PointsPerGarden
+				wasGardenBuilt = true
 			}
 
 			if p.NumWallsLeft <= 0 {
@@ -80,6 +82,7 @@ func CheckForWallBuild(room *rooms.Room, p *rooms.PlayerState) {
 
 		}
 	}
+	return wasGardenBuilt
 }
 
 func runGameLoop(
@@ -197,11 +200,12 @@ func runGameLoop(
 			applyQueuedCmdToRoom(room, qc)
 		}
 
+		wasGardenBuilt := false
 		// 4) advance any in-progress moves
 		for _, p := range room.Players {
 			if !p.Moving {
-				if p.Mode == rooms.WallBuilding {
-					CheckForWallBuild(room, p)
+				if p.Mode == rooms.WallBuilding && !wasGardenBuilt {
+					wasGardenBuilt = CheckForWallBuild(room, p)
 				}
 
 				continue
@@ -237,11 +241,21 @@ func runGameLoop(
 							comboLength := rooms.TileMapInitiateColorChange(room.Map, p.X, p.Y, i, room.Tick, rooms.ColorChangeTicks, p.ID) // sends signal to the tilemap to start a color change. The tilemap will first check for a combo
 
 							if comboLength >= rooms.MinimumCombo {
+
+								// Add items for player (4 silly pads for combo length 8, 9; wallbreaker for combo length 10, 11; 4 silly pads and 2 wallbreakers for combo length 12+)
+								if comboLength >= 8 && comboLength <= 9 {
+									p.NumSillyPadsLeft += 4
+								} else if comboLength >= 10 && comboLength <= 11 {
+									p.NumWallbreakersLeft += 1
+								} else if comboLength >= 12 {
+									p.NumSillyPadsLeft += 4
+									p.NumWallbreakersLeft += 2
+								}
+
 								//NOTE: special case. if it is a combo, subtract 1 from numColorChanges, but don't go to cooldown yet. This way if you get a combo on your last colorChange, you still have to do cooldown after done building walls
 								p.NumColorChangesLeft = p.NumColorChangesLeft - 1
 
 								//InitiateCombo makes the tilemap into foundations
-								//TODO here I need to pass in the index of the foundation based on the p.ID. Currently hardcoded, need to make this protocolized somehow
 
 								room.Map.InitiateCombo(p.FoundationIndex)
 								//room.Map.InitiateCombo(5)
@@ -277,6 +291,29 @@ func runGameLoop(
 				} // end else if p.Mode == WallBuilding
 			}
 		}
+
+		// if a garden was built, there is a chance that it eliminated a player's foundations. In this case,
+		// they still have "numwallsLeft" and "numcolorchangesleft"
+		// time to reset numwallsleft to 0
+		if wasGardenBuilt {
+			for _, p := range room.Players {
+				if p.NumWallsLeft > 0 {
+					if room.Map.CountTilesOfIndex(p.FoundationIndex) == 0 {
+						p.NumWallsLeft = 0
+
+						// Now account for the special case: if there are still some colorChangesLeft, enter color changing mode.
+						// else, enter cooldown
+
+						if p.NumColorChangesLeft > 0 {
+							p.Mode = rooms.ColorChanging
+						} else {
+							p.EnterCooldown(room.Tick)
+						}
+
+					} //end if room.Map.CountTilesOfIndex
+				} // end if p.NumWallsLeft > 0
+			} // next _, p
+		} //end if was gardenbuilt
 
 		// 5) use intentDir to start moves
 		for _, p := range room.Players {

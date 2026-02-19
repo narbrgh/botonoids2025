@@ -166,6 +166,19 @@ func (tm *TileMap) SetTileAndAddChange(x, y int, index uint8) bool {
 	return true
 }
 
+func (tm *TileMap) CountTilesOfIndex(i uint8) int {
+	n := 0
+	for y := range tm.Tiles {
+		for x := range tm.Tiles[y] {
+			if tm.Tiles[y][x].Index == i {
+				n++
+			}
+
+		}
+	}
+	return n
+}
+
 func (tm *TileMap) GetTileIndexAfterColorChange(x, y int) (uint8, bool) {
 	if x < 0 || x >= tm.Cols || y < 0 || y >= tm.Rows {
 		return 0, false

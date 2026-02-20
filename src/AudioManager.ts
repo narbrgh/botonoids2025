@@ -10,13 +10,31 @@ type MusicOptions = {
   volume?: number;
 };
 
+type IntroEndedHandler = (() => void) | null;
+
+type SingleMusicTrack = {
+  kind: "single";
+  el: HTMLAudioElement;
+  baseVolume: number;
+};
+
+type IntroLoopMusicTrack = {
+  kind: "introLoop";
+  introEl: HTMLAudioElement;
+  loopEl: HTMLAudioElement;
+  baseVolume: number;
+  playToken: number;
+  introEndedHandler: IntroEndedHandler;
+};
+
+type MusicTrack = SingleMusicTrack | IntroLoopMusicTrack;
+
 export default class AudioManager {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private sfxGain: GainNode | null = null;
   private buffers = new Map<string, AudioBuffer>();
-  private musicEls = new Map<string, HTMLAudioElement>();
-  private musicBaseVolumes = new Map<string, number>();
+  private musicTracks = new Map<string, MusicTrack>();
   private unlocked = false;
   private musicVolume = 1;
   private sfxVolume = 1;
@@ -75,34 +93,117 @@ export default class AudioManager {
     el.loop = opts.loop ?? true;
     el.preload = "auto";
     const baseVolume = opts.volume ?? 1;
-    this.musicBaseVolumes.set(key, baseVolume);
     el.volume = baseVolume * this.musicVolume;
-    this.musicEls.set(key, el);
+    this.musicTracks.set(key, {
+      kind: "single",
+      el,
+      baseVolume,
+    });
+  }
+
+  registerMusicIntroLoop(key: string, introUrl: string, loopUrl: string, opts: MusicOptions = {}): void {
+    const baseVolume = opts.volume ?? 1;
+    const introEl = new Audio(introUrl);
+    introEl.preload = "auto";
+    introEl.loop = false;
+    introEl.volume = baseVolume * this.musicVolume;
+
+    const loopEl = new Audio(loopUrl);
+    loopEl.preload = "auto";
+    loopEl.loop = true;
+    loopEl.volume = baseVolume * this.musicVolume;
+
+    this.musicTracks.set(key, {
+      kind: "introLoop",
+      introEl,
+      loopEl,
+      baseVolume,
+      playToken: 0,
+      introEndedHandler: null,
+    });
   }
 
   async playMusic(key: string): Promise<void> {
-    const el = this.musicEls.get(key);
-    if (!el) return;
+    const track = this.musicTracks.get(key);
+    if (!track) return;
     if (!this.unlocked) return;
+
+    if (track.kind === "single") {
+      if (!track.el.paused && !track.el.ended) return;
+      try {
+        await track.el.play();
+      } catch (err) {
+        console.warn("music play error", err);
+      }
+      return;
+    }
+
+    const { introEl, loopEl } = track;
+    if ((!introEl.paused && !introEl.ended) || (!loopEl.paused && !loopEl.ended)) {
+      return;
+    }
+    track.playToken += 1;
+    const token = track.playToken;
+
+    if (track.introEndedHandler) {
+      introEl.removeEventListener("ended", track.introEndedHandler);
+      track.introEndedHandler = null;
+    }
+
+    introEl.pause();
+    introEl.currentTime = 0;
+    loopEl.pause();
+    loopEl.currentTime = 0;
+
+    const onIntroEnded = async () => {
+      if (track.playToken !== token) return;
+      try {
+        await loopEl.play();
+      } catch (err) {
+        console.warn("music loop play error", err);
+      }
+    };
+    track.introEndedHandler = onIntroEnded;
+    introEl.addEventListener("ended", onIntroEnded, { once: true });
+
     try {
-      await el.play();
+      await introEl.play();
     } catch (err) {
-      console.warn("music play error", err);
+      console.warn("music intro play error", err);
     }
   }
 
   stopMusic(key: string): void {
-    const el = this.musicEls.get(key);
-    if (!el) return;
-    el.pause();
-    el.currentTime = 0;
+    const track = this.musicTracks.get(key);
+    if (!track) return;
+
+    if (track.kind === "single") {
+      track.el.pause();
+      track.el.currentTime = 0;
+      return;
+    }
+
+    track.playToken += 1;
+    if (track.introEndedHandler) {
+      track.introEl.removeEventListener("ended", track.introEndedHandler);
+      track.introEndedHandler = null;
+    }
+    track.introEl.pause();
+    track.introEl.currentTime = 0;
+    track.loopEl.pause();
+    track.loopEl.currentTime = 0;
   }
 
   setMusicVolume(value: number): void {
     this.musicVolume = clamp01(value);
-    for (const [key, el] of this.musicEls) {
-      const base = this.musicBaseVolumes.get(key) ?? 1;
-      el.volume = base * this.musicVolume;
+    for (const track of this.musicTracks.values()) {
+      if (track.kind === "single") {
+        track.el.volume = track.baseVolume * this.musicVolume;
+      } else {
+        const volume = track.baseVolume * this.musicVolume;
+        track.introEl.volume = volume;
+        track.loopEl.volume = volume;
+      }
     }
   }
 

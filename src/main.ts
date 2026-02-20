@@ -50,11 +50,24 @@ const ctx = ctxEl;
 ctx.imageSmoothingEnabled = false
 
 const audio = new AudioManager({ sfxPitchMin: 0.95, sfxPitchMax: 1.05 });
+const musicExt = (() => {
+  const probe = document.createElement("audio");
+  const oggSupport = probe.canPlayType('audio/ogg; codecs="vorbis"');
+  return oggSupport === "probably" || oggSupport === "maybe" ? "ogg" : "m4a";
+})();
+
+function musicUrl(name: string): string {
+  return `/music/${encodeURIComponent(name)}.${musicExt}`;
+}
+
 const audioUrls = {
-  menu: "/audio/botonoids.ogg",
-  puzzler: "/audio/puzzler.ogg",
-  happy: "/audio/happy.ogg",
-  epic: "/audio/epic.ogg",
+  theme: musicUrl("theme"),
+  puzzlerIntro: musicUrl("puzzler intro"),
+  puzzlerSong: musicUrl("puzzler song"),
+  happyIntro: musicUrl("happy intro"),
+  happySong: musicUrl("happy song"),
+  epicIntro: musicUrl("epic intro"),
+  epicSong: musicUrl("epic song"),
   combo: "/sfx/combo.wav",
   garden: "/sfx/garden.wav",
   wall: "/sfx/wall.wav",
@@ -65,10 +78,10 @@ const audioUrls = {
   tick: "/sfx/tick.wav",
 } as const;
 
-audio.registerMusic("menu", audioUrls.menu, { loop: true, volume: 0.6 });
-audio.registerMusic("puzzler", audioUrls.puzzler, { loop: true, volume: 0.6 });
-audio.registerMusic("happy", audioUrls.happy, { loop: true, volume: 0.6 });
-audio.registerMusic("epic", audioUrls.epic, { loop: true, volume: 0.6 });
+audio.registerMusic("menu", audioUrls.theme, { loop: true, volume: 0.6 });
+audio.registerMusicIntroLoop("puzzler", audioUrls.puzzlerIntro, audioUrls.puzzlerSong, { volume: 0.6 });
+audio.registerMusicIntroLoop("happy", audioUrls.happyIntro, audioUrls.happySong, { volume: 0.6 });
+audio.registerMusicIntroLoop("epic", audioUrls.epicIntro, audioUrls.epicSong, { volume: 0.6 });
 audio.loadSfx("combo", audioUrls.combo);
 audio.loadSfx("garden", audioUrls.garden);
 audio.loadSfx("wall", audioUrls.wall);
@@ -85,6 +98,7 @@ type GameMusicKey = typeof gameMusicKeys[number];
 let currentMusicKey: string | null = null;
 let selectedGameMusic: GameMusicKey | null = null;
 let selectedMusicChoice: MusicChoice = "random";
+let optionsMusicPreview: GameMusicKey | null = null;
 
 function chooseGameMusic(): GameMusicKey {
   if (!selectedGameMusic) {
@@ -95,13 +109,23 @@ function chooseGameMusic(): GameMusicKey {
 }
 
 function setMusic(key: string | null): void {
-  if (key === currentMusicKey) return;
+  if (key === currentMusicKey) {
+    if (key) audio.playMusic(key);
+    return;
+  }
   if (currentMusicKey) audio.stopMusic(currentMusicKey);
   currentMusicKey = key;
   if (key) audio.playMusic(key);
 }
 
 function updateMusicState(): void {
+  if (optionsOpen) {
+    if (optionsMusicPreview) {
+      setMusic(optionsMusicPreview);
+    }
+    return;
+  }
+
   const inMenu = !joinedRoomId || currentPhase === "phaseLobby";
   const inCountdown = currentPhase === "phaseCountdown";
   const inGame = currentPhase === "phasePlaying";
@@ -268,9 +292,11 @@ optionsOverlay = initOptionsOverlay({
         lastDir = null;
       }
     } else {
+      optionsMusicPreview = null;
       optionsOverlay?.setRebindPending(null);
       optionsOverlay?.setRebindConflict(null);
     }
+    updateMusicState();
   },
   onApplyRebind: (action, key) => {
     controlLabels = { ...controlLabels, [action]: key };
@@ -291,7 +317,12 @@ optionsOverlay = initOptionsOverlay({
   onMusicChoiceChange: (choice) => {
     selectedMusicChoice = choice;
     optionsOverlay?.setMusicChoice(choice);
-    updateMusicState();
+    if (choice === "random") {
+      optionsMusicPreview = null;
+      return;
+    }
+    optionsMusicPreview = choice;
+    setMusic(choice);
   },
   onMusicVolumeChange: (value) => {
     audio.setMusicVolume(value);

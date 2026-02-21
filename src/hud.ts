@@ -53,10 +53,10 @@ export default class HUD {
 
         //Score bars: 
   
-        // for purposes of visibility, will always draw in the order silver, gold, black, white
+        // for purposes of visibility, will always draw in the order pink, gold, black, white
         //from top to bottom
         const roleRank: Record<string, number> = {
-            silverBot: 0,
+            pinkBot: 0,
             goldBot: 1,
             blackBot: 2,
             whiteBot: 3,
@@ -198,7 +198,7 @@ export default class HUD {
                 return {color: "rgb(255, 255, 255)", color2: "#ff0000"}
                 break;
             }
-            case "silverBot": {
+            case "pinkBot": {
                 return {color: "rgb(135, 135, 135)", color2: "#b77736"}                
                 break;
             } 

@@ -2,7 +2,7 @@ import type {Role, Model, DirType} from './protocol'
 
 //layout constants
 
-const ROLE_ORDER: Role[] = ["goldBot", "silverBot", "whiteBot", "blackBot"];
+const ROLE_ORDER: Role[] = ["goldBot", "pinkBot", "whiteBot", "blackBot"];
 const MODEL_ORDER: Model[] = ["alphanoid", "herbanoid", "barvinoid"];
 const DIR_ORDER: DirType[] = ["up", "left", "down", "right"];
 

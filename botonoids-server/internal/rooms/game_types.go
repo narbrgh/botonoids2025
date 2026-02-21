@@ -32,7 +32,7 @@ const (
 
 const (
 	RoleGoldBot   Role = "goldBot"
-	RoleSilverBot Role = "silverBot"
+	RolePinkBot   Role = "pinkBot"
 	RoleWhiteBot  Role = "whiteBot"
 	RoleBlackBot  Role = "blackBot"
 	RoleRandomBot Role = "randomBot"

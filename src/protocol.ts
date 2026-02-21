@@ -8,7 +8,7 @@ export type BotonoidMode = 'walking' | 'colorChanging' | 'wallBuilding' | 'ghost
 export type Phase = 'phaseLobby' | 'phaseCountdown' | 'phasePlaying' | 'phaseFinished';
 export type RoleInvalidMsg = { type: 'roleInvalid'; playerId: number; msg?: string };
 
-export const roles = ["goldBot", "silverBot", "whiteBot", "blackBot", "randomBot", "observer"] as const;
+export const roles = ["goldBot", "pinkBot", "whiteBot", "blackBot", "randomBot", "observer"] as const;
 export type Role = typeof roles[number];
 
 export type ItemType = "itemSillyPad" | "itemWallbreaker" | "itemGhost"

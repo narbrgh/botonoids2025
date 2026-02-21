@@ -512,7 +512,7 @@ button:disabled {
 
 /* optional variants */
 button.gold {  background: #f5c542; color: #111}
-button.silver { background: #c0c0c0; color: #111}
+button.pink { background: #ec6fa8; color: #111}
 button.white { background: #f2f2f2; color: #111}
 button.black { background: #1f1f1f; color: #f2f2f2; border: 1px solid #444; }
 button.randomColor {

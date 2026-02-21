@@ -48,7 +48,7 @@ export function initLobbyUI(onEvent: (e: LobbyEvent) => void): LobbyUIController
 
     const readyBtn = document.querySelector<HTMLButtonElement>(".ready-btn");
     const roleButtons = Array.from(document.querySelectorAll<HTMLButtonElement>(".role-btn"));
-    const colorRoles: Role[] = ["goldBot", "silverBot", "whiteBot", "blackBot"];
+    const colorRoles: Role[] = ["goldBot", "pinkBot", "whiteBot", "blackBot"];
     const unavailableRoles = new Set<Role>();
 
     const updateReadyEnabled = () => {
@@ -114,7 +114,7 @@ export function initLobbyUI(onEvent: (e: LobbyEvent) => void): LobbyUIController
         });
     }
 
-    //listener for "role" buttons (gold, silver, black, white, random, observer)
+    //listener for "role" buttons (gold, pink, black, white, random, observer)
     roleButtons.forEach(btn => {
         btn.addEventListener("click", () => {
             if (btn.disabled) return;

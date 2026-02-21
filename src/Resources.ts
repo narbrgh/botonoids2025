@@ -3,7 +3,7 @@
 export const toLoad = {
   tiles: "/sprites/tiles.png",
   goldBot: "/sprites/goldBot.png",
-  silverBot: "/sprites/silverBot.png",
+  pinkBot: "/sprites/pinkBot.png",
   bots: "/sprites/bots.png",
   items: "sprites/items32.png",
   sillyPads: "sprites/sillypads.png",

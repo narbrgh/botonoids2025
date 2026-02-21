@@ -52,7 +52,7 @@ func applyQueuedCmdToRoom(room *rooms.Room, qc QueuedCmd) {
 	}
 
 	isColorRole := func(role rooms.Role) bool {
-		return role == rooms.RoleGoldBot || role == rooms.RoleSilverBot || role == rooms.RoleWhiteBot || role == rooms.RoleBlackBot
+		return role == rooms.RoleGoldBot || role == rooms.RolePinkBot || role == rooms.RoleWhiteBot || role == rooms.RoleBlackBot
 	}
 	releaseRole := func(ownerID int, role rooms.Role) {
 		if isColorRole(role) {

@@ -36,7 +36,7 @@ func (r *Room) allReady() bool {
 
 	//This counts will count how many of each color there are. If it exceeds one per Role, then the game can't start yet.
 	//This way we don't have 2 gold players, for example.
-	counts := map[Role]int{RoleGoldBot: 0, RoleSilverBot: 0, RoleWhiteBot: 0, RoleBlackBot: 0}
+	counts := map[Role]int{RoleGoldBot: 0, RolePinkBot: 0, RoleWhiteBot: 0, RoleBlackBot: 0}
 
 	for _, p := range r.Players {
 		// Every connected player must click ready (including observers).
@@ -51,7 +51,7 @@ func (r *Room) allReady() bool {
 		}
 	}
 	//return false if any single color has more than one player
-	if counts[RoleGoldBot] > 1 || counts[RoleSilverBot] > 1 || counts[RoleWhiteBot] > 1 || counts[RoleBlackBot] > 1 {
+	if counts[RoleGoldBot] > 1 || counts[RolePinkBot] > 1 || counts[RoleWhiteBot] > 1 || counts[RoleBlackBot] > 1 {
 		return false
 	}
 
@@ -125,7 +125,7 @@ func (r *Room) resetToLobby() {
 	r.Phase = PhaseLobby
 	r.PhaseEndsAtTick = 0
 
-	r.RoleTaken = map[Role]bool{RoleGoldBot: false, RoleSilverBot: false, RoleWhiteBot: false, RoleBlackBot: false}
+	r.RoleTaken = map[Role]bool{RoleGoldBot: false, RolePinkBot: false, RoleWhiteBot: false, RoleBlackBot: false}
 
 	for _, p := range r.Players {
 		p.Ready = false

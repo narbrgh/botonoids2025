@@ -38,7 +38,19 @@ export default class NetClient {
   ];
 
   private defaultWsUrl(): string {
-    return 'ws://localhost:8080/ws';
+    // Optional explicit override (for example: wss://api.botonoids.com/ws).
+    const envUrl = (import.meta as any).env?.VITE_WS_URL as string | undefined;
+    if (envUrl && envUrl.trim().length > 0) return envUrl;
+
+    const { protocol, hostname, host } = window.location;
+
+    // Local Vite dev server runs on :5173 while Go server typically runs on :8080.
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'ws://localhost:8080/ws';
+    }
+
+    const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${wsProtocol}//${host}/ws`;
   }
 
   connect(url?: string) {

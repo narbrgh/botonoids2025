@@ -62,12 +62,12 @@ function musicUrl(name: string): string {
 
 const audioUrls = {
   theme: musicUrl("theme"),
-  puzzlerIntro: musicUrl("puzzler intro"),
-  puzzlerSong: musicUrl("puzzler song"),
-  happyIntro: musicUrl("happy intro"),
-  happySong: musicUrl("happy song"),
-  epicIntro: musicUrl("epic intro"),
-  epicSong: musicUrl("epic song"),
+  puzzlerIntro: musicUrl("puzzlerintro"),
+  puzzlerSong: musicUrl("puzzlersong"),
+  happyIntro: musicUrl("happyintro"),
+  happySong: musicUrl("happysong"),
+  epicIntro: musicUrl("epicintro"),
+  epicSong: musicUrl("epicsong"),
   combo: "/sfx/combo.wav",
   garden: "/sfx/garden.wav",
   wall: "/sfx/wall.wav",

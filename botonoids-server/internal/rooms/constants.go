@@ -21,8 +21,8 @@ const (
 	NumColors                 = 5
 	MinimumCombo              = 6
 	MaxNumColorChanges        = 5
-	DEFAULT_SILLY_PADS        = 10
-	DEFAULT_WALLBREAKERS      = 100
+	DEFAULT_SILLY_PADS        = 5
+	DEFAULT_WALLBREAKERS      = 1
 	PointsPerWall             = 1
 	PointsPerGarden           = 2
 	GardenDestroyTicksPerTile = 1 // how slowly a garden is destroyed by a wallbreaker. Higher numbers mean it takes longer for the "explosion" of gardens to propogate

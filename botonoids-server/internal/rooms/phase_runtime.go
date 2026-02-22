@@ -17,7 +17,7 @@ var phaseCfg = PhaseConfig{
 	MinPlayers:        1,
 	MaxPlayers:        4,
 	CountdownDurTicks: uint64(3 * TickHz),
-	GameDurTicks:      uint64(15 * TickHz),
+	GameDurTicks:      uint64(540 * TickHz),
 	FinishedDurTicks:  uint64(10 * TickHz),
 }
 
@@ -159,6 +159,46 @@ func (r *Room) allConnectedDismissedResults() bool {
 	return hasConnected
 }
 
+func (r *Room) shouldEndGameBecauseDrops() bool {
+	if r.Phase != PhasePlaying {
+		return false
+	}
+
+	connectedActive := make([]*PlayerState, 0, len(r.Players))
+	var leader *PlayerState
+	tieForLead := false
+	totalActivePlayers := 0
+
+	for _, p := range r.Players {
+		if p.SelectedRole == RoleObserver {
+			continue
+		}
+		totalActivePlayers++
+
+		if p.Connected {
+			connectedActive = append(connectedActive, p)
+		}
+
+		if leader == nil || p.Score > leader.Score {
+			leader = p
+			tieForLead = false
+		} else if p.Score == leader.Score {
+			tieForLead = true
+		}
+	}
+
+	// Don't auto-end solo practice games.
+	if totalActivePlayers <= 1 {
+		return false
+	}
+
+	if len(connectedActive) != 1 || leader == nil || tieForLead {
+		return false
+	}
+
+	return connectedActive[0].ID == leader.ID
+}
+
 func (r *Room) resetToLobby() {
 	r.Phase = PhaseLobby
 	r.PhaseEndsAtTick = 0
@@ -233,6 +273,10 @@ func (r *Room) UpdatePhase() {
 			r.resetToLobby()
 		}
 	case PhasePlaying:
+		if r.shouldEndGameBecauseDrops() {
+			r.enterResultsScreen()
+			break
+		}
 		if r.Tick >= r.PhaseEndsAtTick {
 			r.enterResultsScreen()
 		}

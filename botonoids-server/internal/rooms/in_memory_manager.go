@@ -77,7 +77,7 @@ func (m *InMemoryManager) CreateRoom(_ context.Context, actor PlayerRef, req Cre
 	if convErr != nil {
 		return nil, &AppError{Code: ErrInvalidRequest, Message: "player id must be numeric"}
 	}
-	room.Players[actorID] = &PlayerState{ID: actorID, Name: actor.Name, Ready: false, Connected: true}
+	room.Players[actorID] = &PlayerState{ID: actorID, Name: actor.Name, Ready: false, Connected: true, ResultsRole: RoleObserver}
 
 	m.roomsByID[room.ID] = room
 	m.playerToRoom[actor.PlayerID] = room.ID
@@ -102,6 +102,9 @@ func (m *InMemoryManager) JoinRoom(_ context.Context, actor PlayerRef, req JoinR
 	if room.Status == RoomStatusInGame {
 		return nil, &AppError{Code: ErrRoomInGame, Message: "room is already in game"}
 	}
+	if room.Status == RoomStatusFinished {
+		return nil, &AppError{Code: ErrRoomInGame, Message: "room is showing finished game results"}
+	}
 	if len(room.Players) >= room.MaxPlayers {
 		return nil, &AppError{Code: ErrRoomFull, Message: "room is full"}
 	}
@@ -110,7 +113,7 @@ func (m *InMemoryManager) JoinRoom(_ context.Context, actor PlayerRef, req JoinR
 	if convErr != nil {
 		return nil, &AppError{Code: ErrInvalidRequest, Message: "player id must be numeric"}
 	}
-	room.Players[actorID] = &PlayerState{ID: actorID, Name: actor.Name, Ready: false, Connected: true}
+	room.Players[actorID] = &PlayerState{ID: actorID, Name: actor.Name, Ready: false, Connected: true, ResultsRole: RoleObserver}
 	m.playerToRoom[actor.PlayerID] = room.ID
 	room.UpdatedAt = m.nowFn()
 	return cloneRoom(room), nil

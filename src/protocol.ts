@@ -57,6 +57,8 @@ export type SnapshotPlayer = {
   role: Role;
   model: Model;
   ready: boolean;
+  resultsRole: Role;
+  resultsDismissed: boolean;
 };
 
 export type SnapshotTile = {
@@ -148,7 +150,7 @@ export type ConfigMsg = {
   configVersion: number;
 };
 
-export type RoomStatus = 'open' | 'starting' | 'in_game';
+export type RoomStatus = 'open' | 'starting' | 'in_game' | 'finished';
 
 export type RoomSummary = {
   id: string;

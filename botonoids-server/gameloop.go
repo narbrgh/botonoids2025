@@ -369,8 +369,18 @@ func runGameLoop(
 		}
 
 		// 6) Updaters. (tile, player, etc)
+		prevPhase := room.Phase
 		room.UpdatePhase()
 		managedSyncStatusFromPhase(room.ID, room.Phase)
+		phaseChanged := room.Phase != prevPhase
+
+		if phaseChanged {
+			// Send a full map immediately on phase switches (especially lobby -> countdown)
+			// so clients render the newly rerolled tilemap without waiting for periodic sync.
+			if b, err := encodeTileMapSnapshotMsg(room); err == nil {
+				broadcast(room, b)
+			}
+		}
 		sillyPadRemoved, expiredSillyPads, tileChanged, destroyedTiles, Explosions := room.Map.Update(room.Tick)
 
 		if sillyPadRemoved {

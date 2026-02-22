@@ -1,6 +1,9 @@
 package rooms
 
-import "math/rand"
+import (
+	"math/rand"
+	"time"
+)
 
 type PhaseConfig struct {
 	MinPlayers        int
@@ -14,8 +17,8 @@ var phaseCfg = PhaseConfig{
 	MinPlayers:        1,
 	MaxPlayers:        4,
 	CountdownDurTicks: uint64(3 * TickHz),
-	GameDurTicks:      uint64(540 * TickHz),
-	FinishedDurTicks:  uint64(5 * TickHz),
+	GameDurTicks:      uint64(15 * TickHz),
+	FinishedDurTicks:  uint64(10 * TickHz),
 }
 
 type SpawnPos struct {
@@ -67,6 +70,10 @@ func (r *Room) allReady() bool {
 }
 
 func (r *Room) startCountdown() {
+	// New match: reroll tilemap with a fresh seed so each game starts on a new random board.
+	seed := uint32(time.Now().UnixNano())
+	r.Seed = seed
+	r.Map = NewTileMap(WorldCols, WorldRows, int64(seed))
 
 	//first, make each player get their correct graphics based on role (and later skin)
 	for _, p := range r.Players {
@@ -119,6 +126,12 @@ func (r *Room) startCountdown() {
 
 		//now reset data for each player
 		p.ResetData()
+		p.Mode = Walking
+		p.IntentDir = nil
+		p.ActionPressed = false
+		p.Moving = false
+		p.FromX, p.FromY = p.X, p.Y
+		p.ToX, p.ToY = p.X, p.Y
 	}
 
 	r.Phase = PhaseCountdown
@@ -132,6 +145,20 @@ func (r *Room) startGame() {
 	// TODO: reset map / players here
 }
 
+func (r *Room) allConnectedDismissedResults() bool {
+	hasConnected := false
+	for _, p := range r.Players {
+		if !p.Connected {
+			continue
+		}
+		hasConnected = true
+		if !p.ResultsDismissed {
+			return false
+		}
+	}
+	return hasConnected
+}
+
 func (r *Room) resetToLobby() {
 	r.Phase = PhaseLobby
 	r.PhaseEndsAtTick = 0
@@ -142,6 +169,22 @@ func (r *Room) resetToLobby() {
 		p.Ready = false
 		p.Mode = Walking
 		p.SelectedRole = RoleObserver
+		p.ResultsDismissed = false
+	}
+}
+
+func (r *Room) resultsToLobby() {
+	r.Phase = PhaseLobby
+	r.PhaseEndsAtTick = 0
+
+	r.RoleTaken = map[Role]bool{RoleGoldBot: false, RolePinkBot: false, RoleWhiteBot: false, RoleBlackBot: false}
+
+	for _, p := range r.Players {
+		p.Mode = Walking
+		p.ResultsDismissed = false
+		if p.SelectedRole == RoleGoldBot || p.SelectedRole == RolePinkBot || p.SelectedRole == RoleWhiteBot || p.SelectedRole == RoleBlackBot {
+			r.RoleTaken[p.SelectedRole] = true
+		}
 	}
 }
 
@@ -153,7 +196,25 @@ func (r *Room) ForceResetToLobby() {
 
 func (r *Room) enterResultsScreen() {
 	r.Phase = PhaseFinished
-	r.PhaseEndsAtTick = r.Tick + phaseCfg.FinishedDurTicks
+	r.PhaseEndsAtTick = 0
+
+	// Unlock lobby role selection for the next match while preserving old role/model for result cards.
+	r.RoleTaken = map[Role]bool{RoleGoldBot: false, RolePinkBot: false, RoleWhiteBot: false, RoleBlackBot: false}
+	for _, p := range r.Players {
+		p.ResultsRole = p.SelectedRole
+		p.ResultsDismissed = false
+
+		// Clear held inputs so bots don't keep moving into results/countdown.
+		p.IntentDir = nil
+		p.ActionPressed = false
+		p.Moving = false
+		p.FromX, p.FromY = p.X, p.Y
+		p.ToX, p.ToY = p.X, p.Y
+
+		// Let players immediately pick new role/model for the next match.
+		p.Ready = false
+		p.SelectedRole = RoleObserver
+	}
 }
 
 func (r *Room) UpdatePhase() {
@@ -176,8 +237,8 @@ func (r *Room) UpdatePhase() {
 			r.enterResultsScreen()
 		}
 	case PhaseFinished:
-		if r.Tick >= r.PhaseEndsAtTick {
-			r.resetToLobby()
+		if r.allConnectedDismissedResults() {
+			r.resultsToLobby()
 		}
 	}
 

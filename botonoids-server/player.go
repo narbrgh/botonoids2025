@@ -87,6 +87,13 @@ func applyQueuedCmdToRoom(room *rooms.Room, qc QueuedCmd) {
 	}
 
 	if room.Phase != rooms.PhasePlaying {
+		if typ == "resultsOk" {
+			if room.Phase == rooms.PhaseFinished {
+				p.ResultsDismissed = true
+			}
+			return
+		}
+
 		if typ == "cancelCountdown" {
 			if room.Phase == rooms.PhaseCountdown {
 				room.ForceResetToLobby()

@@ -6,6 +6,7 @@ const (
 	RoomStatusOpen     RoomStatus = "open"
 	RoomStatusStarting RoomStatus = "starting"
 	RoomStatusInGame   RoomStatus = "in_game"
+	RoomStatusFinished RoomStatus = "finished"
 )
 
 type PlayerRef struct {

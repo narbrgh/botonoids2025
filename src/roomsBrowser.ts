@@ -48,14 +48,21 @@ export function initRoomsBrowserUI(handlers: RoomsBrowserHandlers): RoomsBrowser
       }
 
       for (const room of rooms) {
+        const statusLabel =
+          room.status === "open" ? "Lobby" :
+          room.status === "starting" ? "Starting..." :
+          room.status === "in_game" ? "In game" :
+          room.status === "finished" ? "Game finished" :
+          room.status;
+        const canJoin = room.status === "open";
         const row = document.createElement("div");
         row.className = "room-row";
         const youTag = joinedRoomId === room.id ? " (You)" : "";
         row.innerHTML = `
           <div>${room.name}${youTag}</div>
           <div>${room.playerCount}/${room.maxPlayers}</div>
-          <div>${room.status}</div>
-          <button data-room-id="${room.id}">Join</button>
+          <div>${statusLabel}</div>
+          <button data-room-id="${room.id}" ${canJoin ? "" : "disabled"}>Join</button>
         `;
 
         const btn = row.querySelector("button");

@@ -153,6 +153,8 @@ func managedSyncStatusFromPhase(roomID string, phase rooms.Phase) {
 		status = rooms.RoomStatusStarting
 	case rooms.PhasePlaying:
 		status = rooms.RoomStatusInGame
+	case rooms.PhaseFinished:
+		status = rooms.RoomStatusFinished
 	default:
 		status = rooms.RoomStatusOpen
 	}

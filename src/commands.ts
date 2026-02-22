@@ -20,3 +20,4 @@ export type Command =
     | { type: 'name'; name: string }
     | { type: 'chat'; text: string }
     | { type: 'cancelCountdown' }
+    | { type: 'resultsOk' }

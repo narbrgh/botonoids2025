@@ -180,6 +180,10 @@ const inGameMenuPanel = document.getElementById("in-game-menu-panel") as HTMLEle
 const inGameMenuOptionsBtn = document.getElementById("in-game-menu-options-btn") as HTMLButtonElement | null;
 const inGameMenuQuitBtn = document.getElementById("in-game-menu-quit-btn") as HTMLButtonElement | null;
 const inGameMenuCloseBtn = document.getElementById("in-game-menu-close-btn") as HTMLButtonElement | null;
+const resultsOverlay = document.getElementById("results-overlay") as HTMLElement | null;
+const resultsListEl = document.getElementById("results-list") as HTMLElement | null;
+const resultsCountdownEl = document.getElementById("results-countdown") as HTMLElement | null;
+const resultsOkBtn = document.getElementById("results-ok-btn") as HTMLButtonElement | null;
 let joinedRoomId: string | null = null;
 let currentPhase: Phase = 'phaseLobby'
 let latestLobbyPlayers: PlayerSnapshotMsg["players"] = [];
@@ -188,6 +192,7 @@ let goOverlayUntilMs = 0;
 let pauseMenuOpen = false;
 let optionsOpen = false;
 let lastDir: DirType | null = null;
+let localResultsDismissed = false;
 
 type BindingAction = keyof KeyMap;
 const BINDING_ACTIONS: BindingAction[] = ["up", "down", "left", "right", "action", "changeItem", "useItem"];
@@ -350,7 +355,8 @@ optionsOverlay = initOptionsOverlay({
 
 function applyOverlayState() {
   roomsBrowserUI.setVisible(!joinedRoomId);
-  lobby.style.display = (joinedRoomId && currentPhase === 'phaseLobby') ? "flex" : "none";
+  const showLobby = joinedRoomId !== null && (currentPhase === 'phaseLobby' || (currentPhase === "phaseFinished" && localResultsDismissed));
+  lobby.style.display = showLobby ? "flex" : "none";
   const showInGameMenu = joinedRoomId !== null && currentPhase === "phasePlaying";
   if (inGameMenuRoot instanceof HTMLElement) {
     inGameMenuRoot.style.display = showInGameMenu ? "flex" : "none";
@@ -360,6 +366,94 @@ function applyOverlayState() {
     if (inGameMenuPanel) inGameMenuPanel.style.display = "none";
     if (inGameMenuToggleBtn) inGameMenuToggleBtn.style.display = "grid";
   }
+  if (resultsOverlay) {
+    const showResults = joinedRoomId !== null && currentPhase === "phaseFinished" && !localResultsDismissed;
+    resultsOverlay.style.display = showResults ? "flex" : "none";
+  }
+}
+
+function getRoleColors(role: Role): { color: string; color2: string } {
+  switch (role) {
+    case "goldBot":
+      return { color: "rgb(255,207,0)", color2: "rgb(176,145,0)" };
+    case "blackBot":
+      return { color: "rgb(0,0,0)", color2: "rgb(148,255,127)" };
+    case "whiteBot":
+      return { color: "rgb(254, 254, 254)", color2: "rgb(255,62,62)" };
+    case "pinkBot":
+      return { color: "rgb(255, 56, 152)", color2: "rgb(158,38,96)" };
+    default:
+      return { color: "rgb(144, 19, 19)", color2: "#ffffff" };
+  }
+}
+
+function renderResultsOverlay(players: PlayerSnapshotMsg["players"]): void {
+  if (!resultsListEl || !resultsCountdownEl) return;
+
+  const participants = players.filter((p) => p.resultsRole !== "observer");
+  const list = (participants.length > 0 ? participants : players)
+    .slice()
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return a.id - b.id;
+    });
+
+  resultsListEl.innerHTML = "";
+  if (list.length === 0) {
+    resultsCountdownEl.textContent = "";
+    return;
+  }
+
+  const maxScore = Math.max(1, ...list.map((p) => p.score));
+  let lastScore: number | null = null;
+  let currentRank = 0;
+
+  for (let i = 0; i < list.length; i++) {
+    const p = list[i];
+    if (lastScore === null || p.score !== lastScore) currentRank = i + 1;
+    lastScore = p.score;
+
+    const label = (p.name && p.name.trim().length > 0) ? p.name : `Player ${p.id}`;
+    const barRatio = Math.max(0, p.score) / maxScore;
+    const barPct = Math.round(barRatio * 100);
+    const roleForResult = p.resultsRole ?? p.role;
+    const { color, color2 } = getRoleColors(roleForResult);
+    const frame = frameForBot(roleForResult, p.model, "down");
+    const col = frame % BOT_SHEET.cols;
+    const row = Math.floor(frame / BOT_SHEET.cols);
+
+    const rowEl = document.createElement("div");
+    rowEl.className = "results-row";
+
+    const nameEl = document.createElement("div");
+    nameEl.className = "results-name";
+    nameEl.textContent = `${currentRank}. ${label}`;
+
+    const avatarEl = document.createElement("span");
+    avatarEl.className = "results-avatar";
+    avatarEl.style.backgroundPosition = `${-32 * col}px ${-32 * row}px`;
+
+    const barTrack = document.createElement("div");
+    barTrack.className = "results-bar-track";
+    const barFill = document.createElement("div");
+    barFill.className = "results-bar-fill";
+    barFill.style.width = `${barPct}%`;
+    barFill.style.background = color;
+    barFill.style.borderColor = color2;
+    barTrack.appendChild(barFill);
+
+    const scoreEl = document.createElement("div");
+    scoreEl.className = "results-score";
+    scoreEl.textContent = String(p.score);
+
+    rowEl.appendChild(avatarEl);
+    rowEl.appendChild(nameEl);
+    rowEl.appendChild(barTrack);
+    rowEl.appendChild(scoreEl);
+    resultsListEl.appendChild(rowEl);
+  }
+
+  resultsCountdownEl.textContent = "";
 }
 
 function isActiveRole(role: Role | null | undefined): boolean {
@@ -605,6 +699,14 @@ if (inGameMenuQuitBtn) {
   });
 }
 
+if (resultsOkBtn) {
+  resultsOkBtn.addEventListener("click", () => {
+    if (!joinedRoomId || currentPhase !== "phaseFinished") return;
+    net.sendCommand({ type: "resultsOk" });
+    resultsOkBtn.disabled = true;
+  });
+}
+
 window.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (e.repeat) return;
@@ -626,6 +728,14 @@ function handlePhaseChange(next: Phase) {
   if (prevPhase === 'phaseLobby' && next === 'phaseCountdown') {
     //reset the bools for the countdown sound effects
     playedCountdownNumber[0] = playedCountdownNumber[1] = playedCountdownNumber[2] = playedCountdownNumber[3] = false
+  }
+  if (next === "phaseFinished" && prevPhase !== "phaseFinished") {
+    net.sendCommand({ type: "input", dir: null });
+    lastDir = null;
+  }
+  if (next !== "phaseFinished") {
+    localResultsDismissed = false;
+    if (resultsOkBtn) resultsOkBtn.disabled = false;
   }
   prevPhase = next;
   currentPhase = next;
@@ -688,10 +798,12 @@ net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
     goOverlayUntilMs = performance.now() + 700;
   }
 
-  currentPhase = s.phase;
+  handlePhaseChange(s.phase);
   phaseEndsAtTick = s.phaseEndsAtTick;
-  lobbyUI.setPlayers(s.players);
   const meFromSnapshot = (net.playerId === null) ? undefined : s.players.find((p) => p.id === net.playerId);
+  localResultsDismissed = !!meFromSnapshot?.resultsDismissed;
+  if (resultsOkBtn) resultsOkBtn.disabled = localResultsDismissed;
+  lobbyUI.setPlayers(s.players);
   lobbyUI.setReadyState(!!meFromSnapshot?.ready);
   const unavailable: Role[] = [];
   for (const p of s.players) {
@@ -737,6 +849,10 @@ net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
   //optional: remove disconnected players
   for (const [id] of botsById) {
     if (!seen.has(id)) botsById.delete(id);
+  }
+
+  if (s.phase === "phaseFinished") {
+    renderResultsOverlay(s.players);
   }
 };
 
@@ -954,6 +1070,9 @@ function update(dt: number) {
 
       break;
     } //end if case phaseplaying
+    case 'phaseFinished': {
+      break;
+    }
   }
   
 }
@@ -1070,6 +1189,16 @@ function render() {
         });
       }
     
+      break;
+    }
+    case 'phaseFinished': {
+      if (tileMap) {tileMap.draw(ctx, nowMs);}
+      for (const bot of botsById.values()) {
+        bot.draw(ctx, nowMs);
+      }
+      const hudY = Y_DRAW_OFFSET + tileSize * rows;
+      hud.draw({x: 0, y: hudY, width: canvas.width, height: canvas.height - hudY, timeLeft: secondsLeft, botsById, localPlayerId: net.playerId, numActivePlayers, nowMs});
+      renderResultsOverlay(latestLobbyPlayers);
       break;
     }
   }

@@ -44,6 +44,8 @@ type PlayerState struct {
 	Ready            bool   `json:"ready"`
 	SelectedRole     Role   `json:"role"`
 	SelectedModel    Model  `json:"model"`
+	ResultsRole      Role   `json:"resultsRole"`
+	ResultsDismissed bool   `json:"resultsDismissed"`
 	TickSelectedRole uint64 `json:"-"`
 
 	ActionPressed bool `json:"-"`
@@ -135,10 +137,19 @@ func (pl *PlayerState) SetGhost(currentTick uint64) {
 }
 
 func (pl *PlayerState) ResetData() {
+	pl.IntentDir = nil
 	pl.ActionPressed = false
 	pl.Moving = false
+	pl.FromX, pl.FromY = pl.X, pl.Y
+	pl.ToX, pl.ToY = pl.X, pl.Y
+	pl.MoveStartTick = 0
+	pl.MoveDurTicks = MoveTicks
 	pl.Facing = Down
 	pl.Mode = Walking
+	pl.NumColorChangesLeft = 0
+	pl.NumWallsLeft = 0
+	pl.CooldownStartTick = 0
+	pl.CooldownDurTicks = 0
 	pl.NumSillyPadsLeft = DEFAULT_SILLY_PADS
 	pl.NumWallbreakersLeft = DEFAULT_WALLBREAKERS
 	pl.Score = 0

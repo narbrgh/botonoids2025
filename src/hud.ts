@@ -187,19 +187,19 @@ export default class HUD {
     private getColors(r: Role): {color: string, color2: string} {
         switch (r) {
             case "goldBot": {
-                return {color: "rgb(166, 164, 54)", color2: "#915252"}
+                return {color: "rgb(255,207,0)", color2: "rgb(176,145,0)"}
                 break;
             }
             case "blackBot": {
-                return {color: "rgb(0, 0, 0)", color2: "#5cadf4"}
+                return {color: "rgb(0,0,0)", color2: "rgb(148,255,127)"}
                 break;
             }
             case "whiteBot": {
-                return {color: "rgb(255, 255, 255)", color2: "#ff0000"}
+                return {color: "rgb(254, 254, 254)", color2: "rgb(255,62,62)"}
                 break;
             }
             case "pinkBot": {
-                return {color: "rgb(135, 135, 135)", color2: "#b77736"}                
+                return {color: "rgb(255, 56, 152)", color2: "#rgb(158,38,96)"}                
                 break;
             } 
             default: {

@@ -37,9 +37,12 @@ export default class NetClient {
 
   ];
 
+  private defaultWsUrl(): string {
+    return 'ws://localhost:8080/ws';
+  }
 
-    connect(url = 'ws://localhost:8080/ws') {
-    this.ws = new WebSocket(url);
+  connect(url?: string) {
+    this.ws = new WebSocket(url ?? this.defaultWsUrl());
 
     this.ws.addEventListener('open', () => {
       console.log('[net] connected');

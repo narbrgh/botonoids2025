@@ -159,3 +159,22 @@ func managedSyncStatusFromPhase(roomID string, phase rooms.Phase) {
 
 	_, _ = roomManager.SetStatus(context.Background(), roomID, status)
 }
+
+func managedCloseRoomIfAllDisconnected(roomID string) bool {
+	if !roomManager.CloseRoomIfAllDisconnected(roomID) {
+		return false
+	}
+
+	managedRoomMu.Lock()
+	defer managedRoomMu.Unlock()
+
+	if managedRoomID == roomID {
+		managedRoomID = ""
+	}
+	for pid, rid := range managedPlayerRoom {
+		if rid == roomID {
+			delete(managedPlayerRoom, pid)
+		}
+	}
+	return true
+}

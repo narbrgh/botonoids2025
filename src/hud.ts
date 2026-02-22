@@ -4,7 +4,7 @@ import Botonoid from "./Botonoid"
 import {Sprite} from "./Sprite"
 import { resources } from "./Resources";
 import Vector2 from "./Vector2"
-import type { Role , ItemType } from "./protocol"
+import type { Role } from "./protocol"
 import { X_DRAW_OFFSET } from "./Constants";
 
 const PLAYER_CARD_WIDTH = 120
@@ -199,7 +199,7 @@ export default class HUD {
                 break;
             }
             case "pinkBot": {
-                return {color: "rgb(255, 56, 152)", color2: "#rgb(158,38,96)"}                
+                return {color: "rgb(255, 56, 152)", color2: "rgb(127, 16, 70)"}                
                 break;
             } 
             default: {
@@ -315,6 +315,20 @@ export default class HUD {
 
             this.ctx.strokeText(String(bot.getGhostCountLeft(nowMs)), dL[2].x+spriteW/2, dL[2].y + spriteH / 2 + 4);
             this.ctx.fillText(String(bot.getGhostCountLeft(nowMs)), dL[2].x+spriteW/2, dL[2].y+spriteH/2+4);
+        }
+
+        if (!bot.isConnected()) {
+            this.ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+            this.ctx.fillRect(x, y, width, height);
+
+            this.ctx.font = '700 16px "Goldman"';
+            this.ctx.textAlign = "center";
+            this.ctx.textBaseline = "middle";
+            this.ctx.lineWidth = 4;
+            this.ctx.strokeStyle = "#000000";
+            this.ctx.fillStyle = "#ff4d4d";
+            this.ctx.strokeText("OFFLINE", x + width / 2, y + height / 2);
+            this.ctx.fillText("OFFLINE", x + width / 2, y + height / 2);
         }
     }
        

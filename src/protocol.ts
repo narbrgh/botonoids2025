@@ -1,5 +1,3 @@
-import type TileMap from "./TileMap";
-
 // src/protocol.ts
 export type DirType = 'up' | 'down' | 'left' | 'right';
 export type InputCmd = { type: 'input'; dir: DirType | null };
@@ -32,6 +30,7 @@ export type SnapshotPlayer = {
 
   id: number;
   name?: string;
+  connected: boolean;
   x: number;
   y: number;
   facing: DirType;

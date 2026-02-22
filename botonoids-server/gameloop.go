@@ -116,6 +116,7 @@ func runGameLoop(
 					p = &rooms.PlayerState{ID: r.Client.PlayerID}
 					room.Players[r.Client.PlayerID] = p
 				}
+				p.Connected = true
 				if p.Name == "" {
 					p.Name = getPlayerName(r.Client.PlayerID)
 				}
@@ -185,6 +186,14 @@ func runGameLoop(
 					// The channel is closed by wsHandler when the websocket actually disconnects.
 					_ = cl
 					delete(room.Clients, u.PlayerID)
+				}
+				if p, ok := room.Players[u.PlayerID]; ok {
+					p.Connected = false
+					p.Ready = false
+				}
+				if managedCloseRoomIfAllDisconnected(room.ID) {
+					stopRoomRunner(room.ID)
+					return
 				}
 			default:
 				break REGDRAIN

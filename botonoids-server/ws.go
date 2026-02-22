@@ -60,21 +60,20 @@ func wsHandler(w http.ResponseWriter, r *http.Request) { // This func is called 
 	playerID := int(atomic.AddInt32(&nextID, 1)) // Atomically increment nextID and return the new value. This guarantees unique player IDs even if two clients connect at the same time.
 	setPlayerName(playerID, defaultPlayerName(playerID))
 
-	// unregister should be deferred once, here
-	defer func() {
-		if roomID := managedGetPlayerRoomID(playerID); roomID != "" {
-			runtimeUnregisterClient(roomID, playerID)
-		}
-		managedLeavePlayer(playerID)
-		removePlayerName(playerID)
-	}()
-
 	client := &rooms.Client{
 		PlayerID: playerID,
 		Conn:     c,
 		Send:     make(chan []byte, 256),
 	}
 	defer close(client.Send)
+
+	// unregister should be deferred once, here
+	defer func() {
+		if roomID := managedGetPlayerRoomID(playerID); roomID != "" {
+			runtimeUnregisterClient(roomID, playerID)
+		}
+		removePlayerName(playerID)
+	}()
 
 	//  writer goroutine: send snapshots/msgs to the socket
 	go func() {

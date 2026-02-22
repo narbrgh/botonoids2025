@@ -32,6 +32,7 @@ var spawnPositions = []SpawnPos{
 
 func (r *Room) allReady() bool {
 	ready := 0
+	connectedPlayers := 0
 	activePlayers := 0
 
 	//This counts will count how many of each color there are. If it exceeds one per Role, then the game can't start yet.
@@ -39,6 +40,10 @@ func (r *Room) allReady() bool {
 	counts := map[Role]int{RoleGoldBot: 0, RolePinkBot: 0, RoleWhiteBot: 0, RoleBlackBot: 0}
 
 	for _, p := range r.Players {
+		if !p.Connected {
+			continue
+		}
+		connectedPlayers++
 		// Every connected player must click ready (including observers).
 		if !p.Ready {
 			return false
@@ -55,13 +60,19 @@ func (r *Room) allReady() bool {
 		return false
 	}
 
-	return activePlayers >= phaseCfg.MinPlayers && activePlayers <= phaseCfg.MaxPlayers && ready == len(r.Players)
+	return connectedPlayers > 0 &&
+		activePlayers >= phaseCfg.MinPlayers &&
+		activePlayers <= phaseCfg.MaxPlayers &&
+		ready == connectedPlayers
 }
 
 func (r *Room) startCountdown() {
 
 	//first, make each player get their correct graphics based on role (and later skin)
 	for _, p := range r.Players {
+		if !p.Connected {
+			continue
+		}
 		// if random Role, then select from available bots
 		if p.SelectedRole == RoleRandomBot {
 			// available is a slice of roles available
@@ -95,7 +106,7 @@ func (r *Room) startCountdown() {
 
 	i := 0 //have to have i outside of the for loop, instead of using "for i, p", becuase you don't want i incrementing for observers
 	for _, p := range r.Players {
-		if p.SelectedRole == RoleObserver {
+		if !p.Connected || p.SelectedRole == RoleObserver {
 			continue
 		}
 		if i >= len(positions) { //somehow there was an error. this should never happen

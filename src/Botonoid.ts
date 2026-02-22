@@ -47,6 +47,7 @@ export default class Botonoid {
   private model: Model = "alphanoid"
 
   private id: number = 0
+  private connected = true
 
   private score: number = 0
   private selectedItem: ItemType = "itemSillyPad"
@@ -177,6 +178,7 @@ export default class Botonoid {
     this.cooldownDurTicks = p.cooldownDurTicks;
 
     this.id = p.id
+    this.connected = p.connected
 
     this.score = p.score
     this.selectedItem = p.selectedItem
@@ -327,6 +329,10 @@ export default class Botonoid {
 
   getScore(): number {
     return this.score
+  }
+
+  isConnected(): boolean {
+    return this.connected;
   }
 
   private handleAction(): void {

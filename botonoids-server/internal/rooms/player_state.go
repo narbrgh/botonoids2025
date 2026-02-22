@@ -12,6 +12,7 @@ func IsValidDir(d DirType) bool {
 type PlayerState struct {
 	ID        int      `json:"id"`
 	Name      string   `json:"name,omitempty"`
+	Connected bool     `json:"connected"`
 	X         int      `json:"x"`
 	Y         int      `json:"y"`
 	Facing    DirType  `json:"facing"`

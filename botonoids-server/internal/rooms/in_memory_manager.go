@@ -77,7 +77,7 @@ func (m *InMemoryManager) CreateRoom(_ context.Context, actor PlayerRef, req Cre
 	if convErr != nil {
 		return nil, &AppError{Code: ErrInvalidRequest, Message: "player id must be numeric"}
 	}
-	room.Players[actorID] = &PlayerState{ID: actorID, Name: actor.Name, Ready: false}
+	room.Players[actorID] = &PlayerState{ID: actorID, Name: actor.Name, Ready: false, Connected: true}
 
 	m.roomsByID[room.ID] = room
 	m.playerToRoom[actor.PlayerID] = room.ID
@@ -110,7 +110,7 @@ func (m *InMemoryManager) JoinRoom(_ context.Context, actor PlayerRef, req JoinR
 	if convErr != nil {
 		return nil, &AppError{Code: ErrInvalidRequest, Message: "player id must be numeric"}
 	}
-	room.Players[actorID] = &PlayerState{ID: actorID, Name: actor.Name, Ready: false}
+	room.Players[actorID] = &PlayerState{ID: actorID, Name: actor.Name, Ready: false, Connected: true}
 	m.playerToRoom[actor.PlayerID] = room.ID
 	room.UpdatedAt = m.nowFn()
 	return cloneRoom(room), nil
@@ -249,6 +249,30 @@ func (m *InMemoryManager) GetRoomRef(roomID string) (*Room, *AppError) {
 		return nil, &AppError{Code: ErrRoomNotFound, Message: "room not found"}
 	}
 	return room, nil
+}
+
+// CloseRoomIfAllDisconnected removes a room if every player in the room is disconnected.
+// Returns true when the room was removed.
+func (m *InMemoryManager) CloseRoomIfAllDisconnected(roomID string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	room, ok := m.roomsByID[roomID]
+	if !ok {
+		return false
+	}
+
+	for _, p := range room.Players {
+		if p != nil && p.Connected {
+			return false
+		}
+	}
+
+	for pid := range room.Players {
+		delete(m.playerToRoom, strconv.Itoa(pid))
+	}
+	delete(m.roomsByID, roomID)
+	return true
 }
 
 func (m *InMemoryManager) toRoomSummaryLocked(room *Room) RoomSummary {

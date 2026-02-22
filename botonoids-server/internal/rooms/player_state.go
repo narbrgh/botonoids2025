@@ -97,7 +97,7 @@ func (pl *PlayerState) SetSpecialTilesBasedOnRole() {
 		pl.FoundationIndex = 8
 		pl.WallIndex = 9
 		pl.GardenIndex = 10
-	case RoleSilverBot:
+	case RolePinkBot:
 		pl.FoundationIndex = 5
 		pl.WallIndex = 6
 		pl.GardenIndex = 7
@@ -114,8 +114,8 @@ func (pl *PlayerState) SetSpecialTilesBasedOnRole() {
 
 func (pl *PlayerState) UpdateScore(d DestroyedTiles) {
 	switch pl.SelectedRole {
-	case RoleSilverBot:
-		pl.Score -= d.Silver.Walls*PointsPerWall + d.Silver.Gardens*PointsPerGarden
+	case RolePinkBot:
+		pl.Score -= d.Pink.Walls*PointsPerWall + d.Pink.Gardens*PointsPerGarden
 	case RoleGoldBot:
 		pl.Score -= d.Gold.Walls*PointsPerWall + d.Gold.Gardens*PointsPerGarden
 	case RoleWhiteBot:

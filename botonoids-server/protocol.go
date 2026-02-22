@@ -51,7 +51,7 @@ type ClientMsg struct {
 // ----------------------0-0-0-0-0-0--0-0-0-one-0--==-------------
 // Client -> server room phase messages --00-0-199-=-======-------
 // ------------             -------   ---------- --=-=-==-=-------
-// ------role can be gold, white, silver, or black bot. Future: observer -------
+// ------role can be gold, white, pink, or black bot. Future: observer -------
 
 type ReadyCmd struct {
 	Type  string      `json:"type"` // "ready"

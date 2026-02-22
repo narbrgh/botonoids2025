@@ -28,7 +28,7 @@ type Room struct {
 func NewRoom(id string) *Room {
 	now := time.Now()
 	seed := uint32(now.UnixNano())
-	roleTaken := map[Role]bool{RoleGoldBot: false, RoleSilverBot: false, RoleWhiteBot: false, RoleBlackBot: false}
+	roleTaken := map[Role]bool{RoleGoldBot: false, RolePinkBot: false, RoleWhiteBot: false, RoleBlackBot: false}
 	return &Room{
 		ID:         id,
 		Name:       "Room",

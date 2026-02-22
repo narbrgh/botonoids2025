@@ -696,7 +696,7 @@ net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
   const unavailable: Role[] = [];
   for (const p of s.players) {
     if (p.id === net.playerId) continue;
-    if (p.role === "goldBot" || p.role === "silverBot" || p.role === "whiteBot" || p.role === "blackBot") {
+    if (p.role === "goldBot" || p.role === "pinkBot" || p.role === "whiteBot" || p.role === "blackBot") {
       unavailable.push(p.role);
     }
   }
@@ -816,7 +816,7 @@ net.onSillyPadMsg = (m: SillyPadMsg) => {
 
     if (!i){return}
     switch (i) {
-      case "silverBot": j = 0; break;
+      case "pinkBot": j = 0; break;
       case "goldBot": j = 1; break;
       case "whiteBot": j = 2; break;
       case "blackBot": j = 3; break;
@@ -988,7 +988,7 @@ function render() {
                 roleToSend = "goldBot";
                 break;
               case 1:
-                roleToSend = "silverBot";
+                roleToSend = "pinkBot";
                 break;
               case 2:
                 roleToSend = "whiteBot";

@@ -41,10 +41,10 @@ type DestroyedPair struct {
 }
 
 type DestroyedTiles struct {
-	Gold   DestroyedPair
-	Silver DestroyedPair
-	White  DestroyedPair
-	Black  DestroyedPair
+	Gold  DestroyedPair
+	Pink  DestroyedPair
+	White DestroyedPair
+	Black DestroyedPair
 }
 
 type ExplosionEvent struct {
@@ -640,7 +640,7 @@ func (tm *TileMap) Update(currentTick uint64) (sillyPadExpired bool, expiredSill
 				tileChange = true
 				switch result { // count how many gardens are destroyed, so the gameloop can update the score
 				case 6:
-					d.Silver.Walls++
+					d.Pink.Walls++
 				case 9:
 					d.Gold.Walls++
 				case 12:
@@ -665,7 +665,7 @@ func (tm *TileMap) Update(currentTick uint64) (sillyPadExpired bool, expiredSill
 
 				switch tm.Tiles[y][x].Index { // count how many gardens are destroyed, so the gameloop can update the score
 				case 7:
-					d.Silver.Gardens++
+					d.Pink.Gardens++
 				case 10:
 					d.Gold.Gardens++
 				case 13:

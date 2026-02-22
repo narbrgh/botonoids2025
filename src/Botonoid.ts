@@ -1,7 +1,7 @@
 import Vector2 from './Vector2';
 import { Sprite } from './Sprite';
 import type { Command } from './commands';
-import { MOVE_DURATION_MS, MAX_TILES_COLOR_CHANGE, SERVER_TICK_MS, SERVER_TICK_HZ, X_DRAW_OFFSET, Y_DRAW_OFFSET } from './Constants';
+import { MOVE_DURATION_MS, SERVER_TICK_HZ, X_DRAW_OFFSET, Y_DRAW_OFFSET } from './Constants';
 
 import type { TileActions, ColorChangeResult } from './TileMap';
 
@@ -79,7 +79,7 @@ export default class Botonoid {
     return this.moveState !== null;
   }
 
-  canMakeMove(id: number, nextTileX: number, nextTileY: number, cols: number, rows: number): boolean {
+  canMakeMove(nextTileX: number, nextTileY: number, cols: number, rows: number): boolean {
     if (nextTileX < 0 || nextTileX >= cols || nextTileY < 0 || nextTileY >= rows) return false
     
     return true
@@ -107,7 +107,7 @@ export default class Botonoid {
     const nextTileY = this.tilePos.y + dy;
 
     // bounds check (TODO collision check against tile map)
-    if (!this.canMakeMove(this.id, nextTileX, nextTileY, cols, rows)) {
+    if (!this.canMakeMove(nextTileX, nextTileY, cols, rows)) {
         return;
     }
 
@@ -123,15 +123,6 @@ export default class Botonoid {
     };
 
     console.log("end of apply command")
-  }
-
-  private static dirToFrame(dir: DirType): number {
-    switch (dir) {
-      case 'down': return 2;
-      case 'left': return 1;
-      case 'right': return 3;
-      case 'up': return 0;
-    }
   }
 
   update(dtMs: number): void {
@@ -335,22 +326,4 @@ export default class Botonoid {
     return this.connected;
   }
 
-  private handleAction(): void {
-    console.log("handleAction");
-
-    switch (this.mode) {
-      case 'walking':
-        this.mode = 'colorChanging';
-        this.numColorChangesLeft = MAX_TILES_COLOR_CHANGE;
-        return;
-      case 'wallBuilding':
-        this.tryToBuildWall();
-        return;
-    }
-  }
-
-  private tryToBuildWall(): void {
-    //TODO implement wall building logic
-  }
- 
 }

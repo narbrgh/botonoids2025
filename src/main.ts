@@ -15,9 +15,9 @@ import HUD from "./hud";
 
 import {frameForBot, BOT_SHEET} from './botonoidSheet'
 
-import { TILE_SIZE, FRAME_SIZE, MOVE_DURATION_MS, Y_DRAW_OFFSET } from './Constants';
+import { TILE_SIZE, FRAME_SIZE, Y_DRAW_OFFSET } from './Constants';
 
-import type { DirType, InputCmd } from './protocol';
+import type { DirType } from './protocol';
 
 import KeyboardController, { type KeyMap } from './KeyboardController';
 import { P2_KEYS } from './keymaps';
@@ -187,7 +187,6 @@ const resultsOkBtn = document.getElementById("results-ok-btn") as HTMLButtonElem
 let joinedRoomId: string | null = null;
 let currentPhase: Phase = 'phaseLobby'
 let latestLobbyPlayers: PlayerSnapshotMsg["players"] = [];
-let phaseEndsAtTick = 0;
 let goOverlayUntilMs = 0;
 let pauseMenuOpen = false;
 let optionsOpen = false;
@@ -799,7 +798,6 @@ net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
   }
 
   handlePhaseChange(s.phase);
-  phaseEndsAtTick = s.phaseEndsAtTick;
   const meFromSnapshot = (net.playerId === null) ? undefined : s.players.find((p) => p.id === net.playerId);
   localResultsDismissed = !!meFromSnapshot?.resultsDismissed;
   if (resultsOkBtn) resultsOkBtn.disabled = localResultsDismissed;
@@ -997,31 +995,7 @@ function spriteForPreview(role: Role, model: Model): Sprite {
   })
 }
 
-function drivePlayer(controller: KeyboardController, player: Botonoid, dt: number) {
-  // buttons (action/changeItem/useItem) — Botonoid ignores for now, but you’ll later route these
-  for (const cmd of controller.consumeCommands()) {
-    net.sendCommand(cmd);
-    if (cols > 0 && rows > 0) {
-      player.applyCommand(cmd, cols, rows);// optional local behavior for now
-    }
-  }
-
-  // movement intent: only start a move when idle
-  if (!player.isMoving()) {
-    const dir = controller.getMoveIntent();
-    if (dir) {
-      const cmd = { type: 'move', dir } as const;
-      net.sendCommand(cmd);
-      if (cols > 0 && rows > 0) {
-        player.applyCommand({ type: 'move', dir }, cols, rows); // optional local behavior for now
-      }
-    }
-  }
-
-  player.update(dt);
-}
-
-function update(dt: number) {
+function update(_dt: number) {
   const nowMs = performance.now();
   updateMusicState();
 

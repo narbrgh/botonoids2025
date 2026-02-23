@@ -223,6 +223,15 @@ type PlayerSnapshotMsg struct {
 	Players         []PlayerSnapshotLite `json:"players"`
 }
 
+type PlayerDeltaMsg struct {
+	Type            string        `json:"type"` // "playerDelta"
+	Tick            uint64        `json:"tick"`
+	Phase           rooms.Phase   `json:"phase"`
+	PhaseEndsAtTick uint64        `json:"phaseEndsAtTick"`
+	MapChecksum     uint32        `json:"mapChecksum"`
+	Deltas          []PlayerDelta `json:"deltas"`
+}
+
 // PlayerSnapshotLite keeps role/model in the fast path (used for rendering),
 // while name is sent via PlayerMetaSnapshotMsg.
 type PlayerSnapshotLite struct {
@@ -253,10 +262,37 @@ type PlayerSnapshotLite struct {
 	SelectedItem        rooms.ItemType `json:"selectedItem"`
 	NumWallbreakersLeft int            `json:"numWallbreakersLeft"`
 	NumSillyPadsLeft    int            `json:"numSillyPadsLeft"`
+}
 
-	Ready            bool       `json:"ready"`
-	ResultsRole      rooms.Role `json:"resultsRole"`
-	ResultsDismissed bool       `json:"resultsDismissed"`
+type PlayerDelta struct {
+	ID int `json:"id"`
+
+	Connected *bool          `json:"connected,omitempty"`
+	X         *int           `json:"x,omitempty"`
+	Y         *int           `json:"y,omitempty"`
+	Facing    *rooms.DirType `json:"facing,omitempty"`
+	IntentDir *rooms.DirType `json:"intentDir,omitempty"`
+	Role      *rooms.Role    `json:"role,omitempty"`
+	Model     *rooms.Model   `json:"model,omitempty"`
+
+	Moving        *bool   `json:"moving,omitempty"`
+	FromX         *int    `json:"fromX,omitempty"`
+	FromY         *int    `json:"fromY,omitempty"`
+	ToX           *int    `json:"toX,omitempty"`
+	ToY           *int    `json:"toY,omitempty"`
+	MoveStartTick *uint64 `json:"moveStartTick,omitempty"`
+	MoveDurTicks  *uint64 `json:"moveDurTicks,omitempty"`
+
+	Mode                *rooms.ModeType `json:"mode,omitempty"`
+	NumColorChangesLeft *int            `json:"numColorChangesLeft,omitempty"`
+	NumWallsLeft        *int            `json:"numWallsLeft,omitempty"`
+	CooldownStartTick   *uint64         `json:"cooldownStartTick,omitempty"`
+	CooldownDurTicks    *uint64         `json:"cooldownDurTicks,omitempty"`
+
+	Score               *int            `json:"score,omitempty"`
+	SelectedItem        *rooms.ItemType `json:"selectedItem,omitempty"`
+	NumWallbreakersLeft *int            `json:"numWallbreakersLeft,omitempty"`
+	NumSillyPadsLeft    *int            `json:"numSillyPadsLeft,omitempty"`
 }
 
 type PlayerMeta struct {
@@ -269,6 +305,18 @@ type PlayerMeta struct {
 type PlayerMetaSnapshotMsg struct {
 	Type    string       `json:"type"` // "playerMetaSnapshot"
 	Players []PlayerMeta `json:"players"`
+}
+
+type PlayerStatus struct {
+	ID               int        `json:"id"`
+	Ready            bool       `json:"ready"`
+	ResultsRole      rooms.Role `json:"resultsRole"`
+	ResultsDismissed bool       `json:"resultsDismissed"`
+}
+
+type PlayerStatusSnapshotMsg struct {
+	Type    string         `json:"type"` // "playerStatusSnapshot"
+	Players []PlayerStatus `json:"players"`
 }
 
 type TileMapSnapshotMsg struct {
@@ -326,6 +374,51 @@ type ChatMsg struct {
 
 // helper function to encode once
 func encodePlayerSnapshot(room *rooms.Room) ([]byte, error) {
+	players := buildPlayerSnapshotLite(room)
+
+	msg := PlayerSnapshotMsg{
+		Type:            "playerSnapshot",
+		Tick:            room.Tick,
+		Phase:           room.Phase,
+		PhaseEndsAtTick: room.PhaseEndsAtTick,
+		MapChecksum:     computeMapChecksum(room.Map),
+		Players:         players,
+	}
+	return json.Marshal(msg)
+}
+
+func encodePlayerDelta(room *rooms.Room, prev map[int]PlayerSnapshotLite) ([]byte, map[int]PlayerSnapshotLite, error) {
+	curr := make(map[int]PlayerSnapshotLite, len(room.Players))
+	for _, p := range buildPlayerSnapshotLite(room) {
+		curr[p.ID] = p
+	}
+
+	deltas := make([]PlayerDelta, 0, len(curr))
+	for id, now := range curr {
+		before, ok := prev[id]
+		if !ok {
+			// First sighting: send a full state delta for this player.
+			before = PlayerSnapshotLite{ID: id}
+		}
+		d := diffPlayer(before, now)
+		if hasPlayerDeltaFields(d) {
+			deltas = append(deltas, d)
+		}
+	}
+
+	msg := PlayerDeltaMsg{
+		Type:            "playerDelta",
+		Tick:            room.Tick,
+		Phase:           room.Phase,
+		PhaseEndsAtTick: room.PhaseEndsAtTick,
+		MapChecksum:     computeMapChecksum(room.Map),
+		Deltas:          deltas,
+	}
+	b, err := json.Marshal(msg)
+	return b, curr, err
+}
+
+func buildPlayerSnapshotLite(room *rooms.Room) []PlayerSnapshotLite {
 	players := make([]PlayerSnapshotLite, 0, len(room.Players))
 	for _, p := range room.Players {
 		players = append(players, PlayerSnapshotLite{
@@ -353,21 +446,126 @@ func encodePlayerSnapshot(room *rooms.Room) ([]byte, error) {
 			SelectedItem:        p.SelectedItem,
 			NumWallbreakersLeft: p.NumWallbreakersLeft,
 			NumSillyPadsLeft:    p.NumSillyPadsLeft,
-			Ready:               p.Ready,
-			ResultsRole:         p.ResultsRole,
-			ResultsDismissed:    p.ResultsDismissed,
 		})
 	}
+	return players
+}
 
-	msg := PlayerSnapshotMsg{
-		Type:            "playerSnapshot",
-		Tick:            room.Tick,
-		Phase:           room.Phase,
-		PhaseEndsAtTick: room.PhaseEndsAtTick,
-		MapChecksum:     computeMapChecksum(room.Map),
-		Players:         players,
+func hasPlayerDeltaFields(d PlayerDelta) bool {
+	return d.Connected != nil ||
+		d.X != nil || d.Y != nil || d.Facing != nil || d.IntentDir != nil || d.Role != nil || d.Model != nil ||
+		d.Moving != nil || d.FromX != nil || d.FromY != nil || d.ToX != nil || d.ToY != nil || d.MoveStartTick != nil || d.MoveDurTicks != nil ||
+		d.Mode != nil || d.NumColorChangesLeft != nil || d.NumWallsLeft != nil || d.CooldownStartTick != nil || d.CooldownDurTicks != nil ||
+		d.Score != nil || d.SelectedItem != nil || d.NumWallbreakersLeft != nil || d.NumSillyPadsLeft != nil
+}
+
+func diffPlayer(old PlayerSnapshotLite, now PlayerSnapshotLite) PlayerDelta {
+	d := PlayerDelta{ID: now.ID}
+	if old.Connected != now.Connected {
+		v := now.Connected
+		d.Connected = &v
 	}
-	return json.Marshal(msg)
+	if old.X != now.X {
+		v := now.X
+		d.X = &v
+	}
+	if old.Y != now.Y {
+		v := now.Y
+		d.Y = &v
+	}
+	if old.Facing != now.Facing {
+		v := now.Facing
+		d.Facing = &v
+	}
+	if (old.IntentDir == nil) != (now.IntentDir == nil) || (old.IntentDir != nil && now.IntentDir != nil && *old.IntentDir != *now.IntentDir) {
+		d.IntentDir = now.IntentDir
+	}
+	if old.Role != now.Role {
+		v := now.Role
+		d.Role = &v
+	}
+	if old.Model != now.Model {
+		v := now.Model
+		d.Model = &v
+	}
+	if old.Moving != now.Moving {
+		v := now.Moving
+		d.Moving = &v
+	}
+	if old.FromX != now.FromX {
+		v := now.FromX
+		d.FromX = &v
+	}
+	if old.FromY != now.FromY {
+		v := now.FromY
+		d.FromY = &v
+	}
+	if old.ToX != now.ToX {
+		v := now.ToX
+		d.ToX = &v
+	}
+	if old.ToY != now.ToY {
+		v := now.ToY
+		d.ToY = &v
+	}
+	if old.MoveStartTick != now.MoveStartTick {
+		v := now.MoveStartTick
+		d.MoveStartTick = &v
+	}
+	if old.MoveDurTicks != now.MoveDurTicks {
+		v := now.MoveDurTicks
+		d.MoveDurTicks = &v
+	}
+	if old.Mode != now.Mode {
+		v := now.Mode
+		d.Mode = &v
+	}
+	if old.NumColorChangesLeft != now.NumColorChangesLeft {
+		v := now.NumColorChangesLeft
+		d.NumColorChangesLeft = &v
+	}
+	if old.NumWallsLeft != now.NumWallsLeft {
+		v := now.NumWallsLeft
+		d.NumWallsLeft = &v
+	}
+	if old.CooldownStartTick != now.CooldownStartTick {
+		v := now.CooldownStartTick
+		d.CooldownStartTick = &v
+	}
+	if old.CooldownDurTicks != now.CooldownDurTicks {
+		v := now.CooldownDurTicks
+		d.CooldownDurTicks = &v
+	}
+	if old.Score != now.Score {
+		v := now.Score
+		d.Score = &v
+	}
+	if old.SelectedItem != now.SelectedItem {
+		v := now.SelectedItem
+		d.SelectedItem = &v
+	}
+	if old.NumWallbreakersLeft != now.NumWallbreakersLeft {
+		v := now.NumWallbreakersLeft
+		d.NumWallbreakersLeft = &v
+	}
+	if old.NumSillyPadsLeft != now.NumSillyPadsLeft {
+		v := now.NumSillyPadsLeft
+		d.NumSillyPadsLeft = &v
+	}
+	return d
+}
+
+func encodePlayerStatusSnapshot(room *rooms.Room) ([]byte, error) {
+	players := make([]PlayerStatus, 0, len(room.Players))
+	for _, p := range room.Players {
+		players = append(players, PlayerStatus{
+			ID:               p.ID,
+			Ready:            p.Ready,
+			ResultsRole:      p.ResultsRole,
+			ResultsDismissed: p.ResultsDismissed,
+		})
+	}
+	return json.Marshal(PlayerStatusSnapshotMsg{Type: "playerStatusSnapshot", Players: players})
 }
 
 func encodePlayerMetaSnapshot(room *rooms.Room) ([]byte, error) {

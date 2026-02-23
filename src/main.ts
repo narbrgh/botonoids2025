@@ -6,7 +6,7 @@ import Vector2 from './Vector2';
 import { resources } from './Resources';
 import TileMap from './TileMap';
 import Botonoid from './Botonoid';
-import type { PlayerSnapshotMsg, PlayerMetaSnapshotMsg, TileMapSnapshotMsg, TileChangeMsg , TileInitiateChangeMsg, TileChangeListMsg, SillyPadMsg, WallbreakerMsg, RoomsListOkMsg, ChatMsg} from './protocol'
+import type { PlayerSnapshotMsg, PlayerDeltaMsg, PlayerMetaSnapshotMsg, PlayerStatusSnapshotMsg, TileMapSnapshotMsg, TileChangeMsg , TileInitiateChangeMsg, TileChangeListMsg, SillyPadMsg, WallbreakerMsg, RoomsListOkMsg, ChatMsg} from './protocol'
 import type { Phase , Role , Model } from './protocol';
 import {initLobbyUI, lobbyState } from "./lobby";
 import { initRoomsBrowserUI } from "./roomsBrowser";
@@ -187,7 +187,9 @@ const resultsOkBtn = document.getElementById("results-ok-btn") as HTMLButtonElem
 let joinedRoomId: string | null = null;
 let currentPhase: Phase = 'phaseLobby'
 let latestLobbyPlayers: PlayerSnapshotMsg["players"] = [];
+const playerStateById = new Map<number, PlayerSnapshotMsg["players"][number]>();
 const playerMetaById = new Map<number, { name?: string; role: Role; model: Model }>();
+const playerStatusById = new Map<number, { ready: boolean; resultsRole: Role; resultsDismissed: boolean }>();
 let checksumMismatchStreak = 0;
 let lastResyncRequestAtMs = 0;
 let goOverlayUntilMs = 0;
@@ -270,13 +272,23 @@ function requestRoomsList() {
 function mergePlayersWithMeta(players: PlayerSnapshotMsg["players"]): PlayerSnapshotMsg["players"] {
   return players.map((p) => {
     const meta = playerMetaById.get(p.id);
+    const status = playerStatusById.get(p.id);
     return {
       ...p,
       name: p.name ?? meta?.name,
       role: p.role ?? meta?.role ?? "observer",
       model: p.model ?? meta?.model ?? "alphanoid",
+      ready: status?.ready ?? false,
+      resultsRole: status?.resultsRole ?? (p.role ?? meta?.role ?? "observer"),
+      resultsDismissed: status?.resultsDismissed ?? false,
     };
   });
+}
+
+function getMergedPlayers(): PlayerSnapshotMsg["players"] {
+  const base = Array.from(playerStateById.values());
+  base.sort((a, b) => a.id - b.id);
+  return mergePlayersWithMeta(base);
 }
 
 const roomsBrowserUI = initRoomsBrowserUI({
@@ -812,14 +824,24 @@ net.onPlayerMetaSnapshot = (m: PlayerMetaSnapshotMsg) => {
   }
 };
 
-net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
-  const players = mergePlayersWithMeta(s.players);
+net.onPlayerStatusSnapshot = (m: PlayerStatusSnapshotMsg) => {
+  for (const p of m.players) {
+    playerStatusById.set(p.id, {
+      ready: p.ready,
+      resultsRole: p.resultsRole,
+      resultsDismissed: p.resultsDismissed,
+    });
+  }
+};
+
+function applyPlayerWireState(tick: number, phase: Phase, phaseEndsAtTick: number, mapChecksum: number) {
+  const players = getMergedPlayers();
   latestLobbyPlayers = players;
-  if (currentPhase === "phaseCountdown" && s.phase === "phasePlaying") {
+  if (currentPhase === "phaseCountdown" && phase === "phasePlaying") {
     goOverlayUntilMs = performance.now() + 700;
   }
 
-  handlePhaseChange(s.phase);
+  handlePhaseChange(phase);
   const meFromSnapshot = (net.playerId === null) ? undefined : players.find((p) => p.id === net.playerId);
   localResultsDismissed = !!meFromSnapshot?.resultsDismissed;
   if (resultsOkBtn) resultsOkBtn.disabled = localResultsDismissed;
@@ -835,7 +857,7 @@ net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
   lobbyUI.setRoleAvailability(unavailable);
   const receivedAtMs = performance.now()
   const seen = new Set<number>();
-  const ticksLeft = Math.max(0, s.phaseEndsAtTick - s.tick);
+  const ticksLeft = Math.max(0, phaseEndsAtTick - tick);
   secondsLeft = Math.ceil(clock.ticksToSeconds(ticksLeft));
 
 
@@ -864,11 +886,11 @@ net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
     
   }
 
-  clock.updateSnapshot(s.tick, receivedAtMs);
+  clock.updateSnapshot(tick, receivedAtMs);
 
   if (tileMap) {
     const localChecksum = tileMap.computeChecksum();
-    if (localChecksum === s.mapChecksum) {
+    if (localChecksum === mapChecksum) {
       checksumMismatchStreak = 0;
     } else {
       checksumMismatchStreak++;
@@ -887,9 +909,30 @@ net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
     if (!seen.has(id)) botsById.delete(id);
   }
 
-  if (s.phase === "phaseFinished") {
+  if (phase === "phaseFinished") {
     renderResultsOverlay(players);
   }
+}
+
+net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
+  playerStateById.clear();
+  for (const p of s.players) {
+    playerStateById.set(p.id, p);
+  }
+  applyPlayerWireState(s.tick, s.phase, s.phaseEndsAtTick, s.mapChecksum);
+};
+
+net.onPlayerDelta = (m: PlayerDeltaMsg) => {
+  for (const d of m.deltas) {
+    const prev = playerStateById.get(d.id);
+    const next = prev ? ({ ...prev } as any) : ({ id: d.id } as any);
+    for (const [k, v] of Object.entries(d)) {
+      if (k === "id" || v === undefined) continue;
+      next[k] = v;
+    }
+    playerStateById.set(d.id, next as PlayerSnapshotMsg["players"][number]);
+  }
+  applyPlayerWireState(m.tick, m.phase, m.phaseEndsAtTick, m.mapChecksum);
 };
 
 net.onTileMapSnapshot = (s: TileMapSnapshotMsg) => {

@@ -56,9 +56,9 @@ export type SnapshotPlayer = {
 
   role: Role;
   model: Model;
-  ready: boolean;
-  resultsRole: Role;
-  resultsDismissed: boolean;
+  ready?: boolean;
+  resultsRole?: Role;
+  resultsDismissed?: boolean;
 };
 
 export type SnapshotTile = {
@@ -89,6 +89,42 @@ export type PlayerSnapshotMsg = {
   players: SnapshotPlayer[];
 };
 
+export type PlayerDelta = {
+  id: number;
+  connected?: boolean;
+  x?: number;
+  y?: number;
+  facing?: DirType;
+  intentDir?: DirType;
+  role?: Role;
+  model?: Model;
+  moving?: boolean;
+  fromX?: number;
+  fromY?: number;
+  toX?: number;
+  toY?: number;
+  moveStartTick?: number;
+  moveDurTicks?: number;
+  mode?: BotonoidMode;
+  numColorChangesLeft?: number;
+  numWallsLeft?: number;
+  cooldownStartTick?: number;
+  cooldownDurTicks?: number;
+  score?: number;
+  selectedItem?: ItemType;
+  numWallbreakersLeft?: number;
+  numSillyPadsLeft?: number;
+};
+
+export type PlayerDeltaMsg = {
+  type: "playerDelta";
+  tick: number;
+  phase: Phase;
+  phaseEndsAtTick: number;
+  mapChecksum: number;
+  deltas: PlayerDelta[];
+};
+
 export type PlayerMeta = {
   id: number;
   name?: string;
@@ -99,6 +135,18 @@ export type PlayerMeta = {
 export type PlayerMetaSnapshotMsg = {
   type: 'playerMetaSnapshot';
   players: PlayerMeta[];
+};
+
+export type PlayerStatus = {
+  id: number;
+  ready: boolean;
+  resultsRole: Role;
+  resultsDismissed: boolean;
+};
+
+export type PlayerStatusSnapshotMsg = {
+  type: 'playerStatusSnapshot';
+  players: PlayerStatus[];
 };
 
 export type TileMapSnapshotMsg = {

@@ -97,6 +97,7 @@ func runGameLoop(
 	defer ticker.Stop()
 
 	pending := make([]QueuedCmd, 0, 256) // local, per-tick scratch buffer. pending queues. use this rather than making new one each tick, so that we don't keep allocating and unallocating memory.
+	prevPlayerWireState := map[int]PlayerSnapshotLite{}
 
 	for {
 		select {
@@ -177,6 +178,9 @@ func runGameLoop(
 				if b, err := encodePlayerMetaSnapshot(room); err == nil {
 					_ = trySend(r.Client, b)
 				}
+				if b, err := encodePlayerStatusSnapshot(room); err == nil {
+					_ = trySend(r.Client, b)
+				}
 				if b, err := encodePlayerSnapshot(room); err == nil {
 					_ = trySend(r.Client, b)
 				}
@@ -187,6 +191,11 @@ func runGameLoop(
 				if b, err := encodePlayerMetaSnapshot(room); err == nil {
 					broadcast(room, b)
 				}
+				if b, err := encodePlayerStatusSnapshot(room); err == nil {
+					broadcast(room, b)
+				}
+				// Force full player state delta on next tick for everyone.
+				prevPlayerWireState = map[int]PlayerSnapshotLite{}
 			case u := <-unregCh:
 				if cl, ok := room.Clients[u.PlayerID]; ok {
 					// Do not close Send here. A connected client can leave one room and join another.
@@ -429,9 +438,22 @@ func runGameLoop(
 
 		// 7) broadcast snapshots
 
-		//broadcast player snapshot every tick
-		if b, err := encodePlayerSnapshot(room); err == nil {
+		// Send full player snapshot once per second, and per-tick deltas in between.
+		if room.Tick%uint64(rooms.TickHz) == 0 {
+			if b, err := encodePlayerSnapshot(room); err == nil {
+				broadcast(room, b)
+			}
+		}
+		if b, next, err := encodePlayerDelta(room, prevPlayerWireState); err == nil {
+			prevPlayerWireState = next
 			broadcast(room, b)
+		}
+
+		// Ready/results data is lobby/results-only; send on a slower wire.
+		if room.Phase != rooms.PhasePlaying && room.Tick%4 == 0 {
+			if b, err := encodePlayerStatusSnapshot(room); err == nil {
+				broadcast(room, b)
+			}
 		}
 
 		// Full tilemap snapshots are sent on join/phase-change only.

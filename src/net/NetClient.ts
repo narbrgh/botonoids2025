@@ -1,5 +1,5 @@
 import type { Command } from '../commands';
-import type { PlayerSnapshotMsg, PlayerMetaSnapshotMsg, TileMapSnapshotMsg, ConfigMsg, TileChangeMsg, TileInitiateChangeMsg, TileChangeListMsg, RoleInvalidMsg, SillyPadMsg, WallbreakerMsg, RoomsListOkMsg, RoomCreateOkMsg, RoomJoinOkMsg, RoomLeaveOkMsg, RoomActionErrorMsg, ChatMsg } from '../protocol';
+import type { PlayerSnapshotMsg, PlayerDeltaMsg, PlayerMetaSnapshotMsg, PlayerStatusSnapshotMsg, TileMapSnapshotMsg, ConfigMsg, TileChangeMsg, TileInitiateChangeMsg, TileChangeListMsg, RoleInvalidMsg, SillyPadMsg, WallbreakerMsg, RoomsListOkMsg, RoomCreateOkMsg, RoomJoinOkMsg, RoomLeaveOkMsg, RoomActionErrorMsg, ChatMsg } from '../protocol';
 
 type HelloMsg = { type: 'hello'; playerId: number; msg?: string };
 
@@ -20,6 +20,8 @@ export default class NetClient {
   private handlers = [
     { guard: this.isHelloMsg, handle: (m: HelloMsg) => { this.playerId = m.playerId; this.onHello?.(m); } },
     { guard: this.isPlayerMetaSnapshotMsg, handle: (m: PlayerMetaSnapshotMsg) => { this.onPlayerMetaSnapshot?.(m); } },
+    { guard: this.isPlayerStatusSnapshotMsg, handle: (m: PlayerStatusSnapshotMsg) => { this.onPlayerStatusSnapshot?.(m); } },
+    { guard: this.isPlayerDeltaMsg, handle: (m: PlayerDeltaMsg) => { this.onPlayerDelta?.(m); } },
     { guard: this.isPlayerSnapshotMsg, handle: (m: PlayerSnapshotMsg) => { this.onPlayerSnapshot?.(m); } },
     { guard: this.isTileMapSnapshotMsg, handle: (m: TileMapSnapshotMsg) => { this.onTileMapSnapshot?.(m);}},
     { guard: this.isConfigMsg, handle: (m: ConfigMsg) => { this.config = m; this.onConfig?.(m); } },
@@ -108,11 +110,30 @@ export default class NetClient {
     );
   }
 
+  private isPlayerDeltaMsg(x: unknown): x is PlayerDeltaMsg {
+    return (
+      typeof x === 'object' &&
+      x !== null &&
+      (x as any).type === 'playerDelta' &&
+      typeof (x as any).tick === 'number' &&
+      Array.isArray((x as any).deltas)
+    );
+  }
+
   private isPlayerMetaSnapshotMsg(x: unknown): x is PlayerMetaSnapshotMsg {
     return (
       typeof x === 'object' &&
       x !== null &&
       (x as any).type === 'playerMetaSnapshot' &&
+      Array.isArray((x as any).players)
+    );
+  }
+
+  private isPlayerStatusSnapshotMsg(x: unknown): x is PlayerStatusSnapshotMsg {
+    return (
+      typeof x === 'object' &&
+      x !== null &&
+      (x as any).type === 'playerStatusSnapshot' &&
       Array.isArray((x as any).players)
     );
   }
@@ -239,7 +260,9 @@ export default class NetClient {
 
   //my convention: use s for snapshot, c for config, m for messge
   onPlayerSnapshot?: (s: PlayerSnapshotMsg) => void;
+  onPlayerDelta?: (m: PlayerDeltaMsg) => void;
   onPlayerMetaSnapshot?: (m: PlayerMetaSnapshotMsg) => void;
+  onPlayerStatusSnapshot?: (m: PlayerStatusSnapshotMsg) => void;
   onTileMapSnapshot?: (s: TileMapSnapshotMsg) => void;
   onConfig?: (c: ConfigMsg) => void;
   onTileChange?: (m: TileChangeMsg) => void;

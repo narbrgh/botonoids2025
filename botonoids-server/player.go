@@ -24,6 +24,9 @@ func applyQueuedCmdToRoom(room *rooms.Room, qc QueuedCmd) {
 			if b, err := encodePlayerMetaSnapshot(room); err == nil {
 				_ = trySend(cl, b)
 			}
+			if b, err := encodePlayerStatusSnapshot(room); err == nil {
+				_ = trySend(cl, b)
+			}
 			if b, err := encodePlayerSnapshot(room); err == nil {
 				_ = trySend(cl, b)
 			}
@@ -106,6 +109,9 @@ func applyQueuedCmdToRoom(room *rooms.Room, qc QueuedCmd) {
 		if typ == "resultsOk" {
 			if room.Phase == rooms.PhaseFinished {
 				p.ResultsDismissed = true
+				if b, err := encodePlayerStatusSnapshot(room); err == nil {
+					broadcast(room, b)
+				}
 			}
 			return
 		}
@@ -147,6 +153,9 @@ func applyQueuedCmdToRoom(room *rooms.Room, qc QueuedCmd) {
 			if b, err := encodePlayerMetaSnapshot(room); err == nil {
 				broadcast(room, b)
 			}
+			if b, err := encodePlayerStatusSnapshot(room); err == nil {
+				broadcast(room, b)
+			}
 			return
 		}
 
@@ -162,6 +171,9 @@ func applyQueuedCmdToRoom(room *rooms.Room, qc QueuedCmd) {
 				p.SelectedRole = rooms.RoleObserver
 				managedSetPlayerReady(qc.PlayerID, false)
 				if b, err := encodePlayerMetaSnapshot(room); err == nil {
+					broadcast(room, b)
+				}
+				if b, err := encodePlayerStatusSnapshot(room); err == nil {
 					broadcast(room, b)
 				}
 				return
@@ -184,6 +196,9 @@ func applyQueuedCmdToRoom(room *rooms.Room, qc QueuedCmd) {
 			p.TickSelectedRole = room.Tick
 			managedSetPlayerReady(qc.PlayerID, true)
 			if b, err := encodePlayerMetaSnapshot(room); err == nil {
+				broadcast(room, b)
+			}
+			if b, err := encodePlayerStatusSnapshot(room); err == nil {
 				broadcast(room, b)
 			}
 		}

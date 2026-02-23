@@ -123,7 +123,7 @@ function setMusic(key: string | null): void {
 }
 
 function updateMusicState(): void {
-  const inResultsPhase = currentPhase === "phaseFinished";
+  const inResultsPhase = joinedRoomId !== null && currentPhase === "phaseFinished" && !localResultsDismissed;
   if (inResultsPhase) {
     setMusic("train");
     return;

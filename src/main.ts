@@ -132,8 +132,8 @@ function updateMusicState(): void {
   if (optionsOpen) {
     if (optionsMusicPreview) {
       setMusic(optionsMusicPreview);
+      return;
     }
-    return;
   }
 
   const inMenu = !joinedRoomId || currentPhase === "phaseLobby";
@@ -145,7 +145,7 @@ function updateMusicState(): void {
   }
 
   if (inMenu) {
-    setMusic("menu");
+    setMusic(selectedMusicChoice === "random" ? "menu" : selectedMusicChoice);
     return;
   }
   if (inCountdown) {
@@ -360,10 +360,11 @@ optionsOverlay = initOptionsOverlay({
     optionsOverlay?.setMusicChoice(choice);
     if (choice === "random") {
       optionsMusicPreview = null;
+      updateMusicState();
       return;
     }
     optionsMusicPreview = choice;
-    setMusic(choice);
+    updateMusicState();
   },
   onMusicVolumeChange: (value) => {
     audio.setMusicVolume(value);

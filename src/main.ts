@@ -62,6 +62,7 @@ function musicUrl(name: string): string {
 
 const audioUrls = {
   theme: musicUrl("theme"),
+  train: musicUrl("train"),
   puzzlerIntro: musicUrl("puzzlerintro"),
   puzzlerSong: musicUrl("puzzlersong"),
   happyIntro: musicUrl("happyintro"),
@@ -70,6 +71,7 @@ const audioUrls = {
   epicSong: musicUrl("epicsong"),
   combo: "/sfx/combo.wav",
   garden: "/sfx/garden.wav",
+  explosion: "/sfx/explosion.wav",
   wall: "/sfx/wall.wav",
   sillypadlay: "/sfx/sillypadlay.wav",
   color: "/sfx/color.wav",
@@ -79,11 +81,13 @@ const audioUrls = {
 } as const;
 
 audio.registerMusic("menu", audioUrls.theme, { loop: true, volume: 0.6 });
+audio.registerMusic("train", audioUrls.train, { loop: true, volume: 0.6 });
 audio.registerMusicIntroLoop("puzzler", audioUrls.puzzlerIntro, audioUrls.puzzlerSong, { volume: 0.6 });
 audio.registerMusicIntroLoop("happy", audioUrls.happyIntro, audioUrls.happySong, { volume: 0.6 });
 audio.registerMusicIntroLoop("epic", audioUrls.epicIntro, audioUrls.epicSong, { volume: 0.6 });
 audio.loadSfx("combo", audioUrls.combo);
 audio.loadSfx("garden", audioUrls.garden);
+audio.loadSfx("explosion", audioUrls.explosion);
 audio.loadSfx("wall", audioUrls.wall);
 audio.loadSfx("sillypadlay", audioUrls.sillypadlay);
 audio.loadSfx("color", audioUrls.color);
@@ -119,6 +123,12 @@ function setMusic(key: string | null): void {
 }
 
 function updateMusicState(): void {
+  const inResultsPhase = currentPhase === "phaseFinished";
+  if (inResultsPhase) {
+    setMusic("train");
+    return;
+  }
+
   if (optionsOpen) {
     if (optionsMusicPreview) {
       setMusic(optionsMusicPreview);
@@ -845,6 +855,7 @@ function applyPlayerWireState(tick: number, phase: Phase, phaseEndsAtTick: numbe
   const meFromSnapshot = (net.playerId === null) ? undefined : players.find((p) => p.id === net.playerId);
   localResultsDismissed = !!meFromSnapshot?.resultsDismissed;
   if (resultsOkBtn) resultsOkBtn.disabled = localResultsDismissed;
+  updateMusicState();
   lobbyUI.setPlayers(players);
   lobbyUI.setReadyState(!!meFromSnapshot?.ready);
   const unavailable: Role[] = [];
@@ -1040,7 +1051,18 @@ net.onConfig = (c) => {
   cols = c.cols;
   rows = c.rows;
 
-  tileMap = new TileMap({ cols, rows, tileSize, tileSprite, sillyPadSprite: sillyPadSprite, wallbreakerSprite: wallbreakerSprite, getEstimatedTick });
+  tileMap = new TileMap({
+    cols,
+    rows,
+    tileSize,
+    tileSprite,
+    sillyPadSprite: sillyPadSprite,
+    wallbreakerSprite: wallbreakerSprite,
+    getEstimatedTick,
+    onExplosionStart: () => {
+      audio.playSfx("explosion", { volume: 0.9, pitchMin: 0.97, pitchMax: 1.03 });
+    },
+  });
   tileMap.rerollWithSeed(c.seed);
 
   clock.updateConfig(c.tickHz);

@@ -42,6 +42,7 @@ export function initLobbyUI(onEvent: (e: LobbyEvent) => void): LobbyUIController
     const backBtn = document.querySelector<HTMLButtonElement>("#lobby-back-btn");
     const optionsBtn = document.querySelector<HTMLButtonElement>("#lobby-options-btn");
     const chatLog = document.querySelector<HTMLDivElement>(".chat-log");
+    const chatSectionTitleEl = document.querySelector<HTMLElement>("#chat-section-title");
     const playerCards = Array.from(document.querySelectorAll<HTMLDivElement>(".players-grid .player-card"));
     const roomNameEl = document.querySelector<HTMLElement>("#lobby-room-name");
     const currentPlayerNameEl = document.querySelector<HTMLElement>("#current-player-name");
@@ -207,6 +208,7 @@ export function initLobbyUI(onEvent: (e: LobbyEvent) => void): LobbyUIController
         },
         setRoomName(name: string) {
             if (roomNameEl) roomNameEl.textContent = name;
+            if (chatSectionTitleEl) chatSectionTitleEl.textContent = `${name} - Chat`;
         },
         setRoleAvailability(unavailable: Role[]) {
             unavailableRoles.clear();

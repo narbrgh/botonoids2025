@@ -17,6 +17,7 @@ type InMemoryManager struct {
 	nowFn             func() time.Time
 	idFn              func() string
 	minPlayersToStart int
+	nextRoomNumber    int
 }
 
 func NewInMemoryManager() *InMemoryManager {
@@ -26,6 +27,7 @@ func NewInMemoryManager() *InMemoryManager {
 		nowFn:             time.Now,
 		idFn:              defaultID,
 		minPlayersToStart: 2,
+		nextRoomNumber:    1,
 	}
 }
 
@@ -56,7 +58,10 @@ func (m *InMemoryManager) CreateRoom(_ context.Context, actor PlayerRef, req Cre
 	}
 
 	name := strings.TrimSpace(req.Name)
-	if len(name) < 1 || len(name) > 32 {
+	if name == "" {
+		name = fmt.Sprintf("Room %d", m.nextRoomNumber)
+		m.nextRoomNumber++
+	} else if len(name) > 32 {
 		return nil, &AppError{Code: ErrInvalidName, Message: "room name must be between 1 and 32 chars"}
 	}
 

@@ -26,8 +26,10 @@ export function initRoomsBrowserUI(handlers: RoomsBrowserHandlers): RoomsBrowser
     throw new Error("rooms browser DOM is missing required elements");
   }
 
+  let clearErrorTimer: number | null = null;
+
   createRoomBtn.addEventListener("click", () => {
-    const name = roomNameInput.value.trim() || "New Room";
+    const name = roomNameInput.value.trim();
     handlers.onCreateRoom(name, 6);
   });
 
@@ -74,6 +76,16 @@ export function initRoomsBrowserUI(handlers: RoomsBrowserHandlers): RoomsBrowser
     },
     setError(msg) {
       roomsErrorEl.textContent = msg;
+      if (clearErrorTimer !== null) {
+        window.clearTimeout(clearErrorTimer);
+        clearErrorTimer = null;
+      }
+      if (msg.trim().length > 0) {
+        clearErrorTimer = window.setTimeout(() => {
+          roomsErrorEl.textContent = "";
+          clearErrorTimer = null;
+        }, 5000);
+      }
     },
     setVisible(visible) {
       root.style.display = visible ? "flex" : "none";

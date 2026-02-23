@@ -67,6 +67,7 @@ export default class TileMap {
     private readonly wallbreakerSprite: Sprite;
 
     private readonly getEstimatedTick: (nowMs: number) => number;
+    private readonly onExplosionStart?: (x: number, y: number) => void;
 
     constructor(opts: {
         cols: number;
@@ -76,6 +77,7 @@ export default class TileMap {
         sillyPadSprite: Sprite;
         wallbreakerSprite: Sprite;
         getEstimatedTick: (nowMs: number) => number;
+        onExplosionStart?: (x: number, y: number) => void;
     }) {
         this.cols = opts.cols;
         this.rows = opts.rows;
@@ -85,6 +87,7 @@ export default class TileMap {
         this.wallbreakerSprite = opts.wallbreakerSprite;
 
         this.getEstimatedTick = opts.getEstimatedTick;
+        this.onExplosionStart = opts.onExplosionStart;
 
         this.tiles = this.generateRandomTiles();
         this.randomizeBoard();
@@ -249,6 +252,7 @@ export default class TileMap {
             startTick: nowTick,
             durTicks: Math.max(4, Math.round(0.6 * SERVER_TICK_HZ)),
         });
+        this.onExplosionStart?.(x, y);
     }
 
     rerollWithSeed(seed: number): void {

@@ -325,15 +325,15 @@ func (tm *TileMap) CountEdgesHit() int {
 }
 func (tm *TileMap) CheckForGarden(x, y int, foundationIndex uint8, wallIndex uint8, gardenIndex uint8, ID int) (gardenResult bool, numFoundationsDestroyed int, numGardensBuilt int) { // returns true if garden; returns number of foundation tiles destroyed as the first int
 	//this will check left, up, down, and right to see if a garden can be made at each
-	//first reset the "temp" map
+	//first reset the "temp" maps
 	tm.ResetTempRegionAndGardenTileMap()
-
-	tm.tempTileMap[y][x] = true
 
 	madeGarden := false
 	n := 0
 
 	// check left
+	tm.ResetTempTileMap()
+	tm.tempTileMap[y][x] = true
 	tm.ResetEdges()
 	tm.ResetRegionTileMap()
 
@@ -348,6 +348,8 @@ func (tm *TileMap) CheckForGarden(x, y int, foundationIndex uint8, wallIndex uin
 	}
 
 	//check right
+	tm.ResetTempTileMap()
+	tm.tempTileMap[y][x] = true
 	tm.ResetEdges()
 	tm.ResetRegionTileMap()
 	if x < tm.Cols-1 && tm.tempTileMap[y][x+1] == false && isTileGardenable(tm.Tiles[y][x+1].Index) {
@@ -361,6 +363,8 @@ func (tm *TileMap) CheckForGarden(x, y int, foundationIndex uint8, wallIndex uin
 	}
 
 	//check up
+	tm.ResetTempTileMap()
+	tm.tempTileMap[y][x] = true
 	tm.ResetEdges()
 	tm.ResetRegionTileMap()
 	if y > 0 && tm.tempTileMap[y-1][x] == false && isTileGardenable(tm.Tiles[y-1][x].Index) {
@@ -375,6 +379,8 @@ func (tm *TileMap) CheckForGarden(x, y int, foundationIndex uint8, wallIndex uin
 	}
 
 	//check down
+	tm.ResetTempTileMap()
+	tm.tempTileMap[y][x] = true
 	tm.ResetEdges()
 	tm.ResetRegionTileMap()
 	if y < tm.Rows-1 && tm.tempTileMap[y+1][x] == false && isTileGardenable(tm.Tiles[y+1][x].Index) {

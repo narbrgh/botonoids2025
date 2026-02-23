@@ -255,6 +255,43 @@ export default class TileMap {
         this.tiles = this.generateRandomTilesFromSeed(seed);
     }
 
+    private mixChecksum(h: number, v: number): number {
+        const val = v >>> 0;
+        const mixed = (h ^ ((val + 0x9e3779b9 + ((h << 6) >>> 0) + (h >>> 2)) >>> 0)) >>> 0;
+        return mixed;
+    }
+
+    computeChecksum(): number {
+        let h = 2166136261 >>> 0;
+        h = this.mixChecksum(h, this.cols);
+        h = this.mixChecksum(h, this.rows);
+
+        for (let y = 0; y < this.rows; y++) {
+            for (let x = 0; x < this.cols; x++) {
+                const t = this.tiles[y][x];
+                h = this.mixChecksum(h, t.index);
+                h = this.mixChecksum(h, t.changing ? 1 : 0);
+                h = this.mixChecksum(h, t.tileChangeStartTick);
+                h = this.mixChecksum(h, t.tileChangeDurTicks);
+
+                const sp = this.sillyPads[y][x];
+                h = this.mixChecksum(h, sp.active ? 1 : 0);
+                h = this.mixChecksum(h, sp.ownerId);
+                h = this.mixChecksum(h, sp.expiresAtTick);
+            }
+        }
+
+        h = this.mixChecksum(h, this.wallbreakers.length);
+        for (const wb of this.wallbreakers) {
+            h = this.mixChecksum(h, wb.x);
+            h = this.mixChecksum(h, wb.y);
+            h = this.mixChecksum(h, wb.startTick);
+            h = this.mixChecksum(h, wb.expiresAtTick);
+        }
+
+        return h >>> 0;
+    }
+
     setAuthoritativeInitiateColorChange(tilePos: Vector2, toIndex: number, tileChangeStartTick: number, tileChangeDurTicks: number): void {
         console.log("setAuthoritativeInitiateColorChange");
         if (this.inBounds(tilePos)) {

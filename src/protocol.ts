@@ -85,7 +85,20 @@ export type PlayerSnapshotMsg = {
   tick: number;
   phase: Phase;
   phaseEndsAtTick: number;
+  mapChecksum: number;
   players: SnapshotPlayer[];
+};
+
+export type PlayerMeta = {
+  id: number;
+  name?: string;
+  role: Role;
+  model: Model;
+};
+
+export type PlayerMetaSnapshotMsg = {
+  type: 'playerMetaSnapshot';
+  players: PlayerMeta[];
 };
 
 export type TileMapSnapshotMsg = {

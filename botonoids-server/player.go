@@ -19,6 +19,19 @@ func applyQueuedCmdToRoom(room *rooms.Room, qc QueuedCmd) {
 	}
 
 	switch typ {
+	case "resyncRequest":
+		if cl, ok := room.Clients[qc.PlayerID]; ok {
+			if b, err := encodePlayerMetaSnapshot(room); err == nil {
+				_ = trySend(cl, b)
+			}
+			if b, err := encodePlayerSnapshot(room); err == nil {
+				_ = trySend(cl, b)
+			}
+			if b, err := encodeTileMapSnapshotMsg(room); err == nil {
+				_ = trySend(cl, b)
+			}
+		}
+		return
 	case "name":
 		cmd, err := decodeNameCmd(qc.Cmd)
 		if err != nil {
@@ -26,6 +39,9 @@ func applyQueuedCmdToRoom(room *rooms.Room, qc QueuedCmd) {
 		}
 		setPlayerName(qc.PlayerID, cmd.Name)
 		p.Name = getPlayerName(qc.PlayerID)
+		if b, err := encodePlayerMetaSnapshot(room); err == nil {
+			broadcast(room, b)
+		}
 		return
 	case "chat":
 		cmd, err := decodeChatCmd(qc.Cmd)
@@ -128,6 +144,9 @@ func applyQueuedCmdToRoom(room *rooms.Room, qc QueuedCmd) {
 				p.Ready = false
 				managedSetPlayerReady(qc.PlayerID, false)
 			}
+			if b, err := encodePlayerMetaSnapshot(room); err == nil {
+				broadcast(room, b)
+			}
 			return
 		}
 
@@ -142,6 +161,9 @@ func applyQueuedCmdToRoom(room *rooms.Room, qc QueuedCmd) {
 				releaseRole(qc.PlayerID, p.SelectedRole)
 				p.SelectedRole = rooms.RoleObserver
 				managedSetPlayerReady(qc.PlayerID, false)
+				if b, err := encodePlayerMetaSnapshot(room); err == nil {
+					broadcast(room, b)
+				}
 				return
 			}
 
@@ -161,6 +183,9 @@ func applyQueuedCmdToRoom(room *rooms.Room, qc QueuedCmd) {
 			p.SelectedModel = cmd.Model
 			p.TickSelectedRole = room.Tick
 			managedSetPlayerReady(qc.PlayerID, true)
+			if b, err := encodePlayerMetaSnapshot(room); err == nil {
+				broadcast(room, b)
+			}
 		}
 		return
 	}

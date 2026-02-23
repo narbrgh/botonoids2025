@@ -219,7 +219,56 @@ type PlayerSnapshotMsg struct {
 	Tick            uint64               `json:"tick"`
 	Phase           rooms.Phase          `json:"phase"`
 	PhaseEndsAtTick uint64               `json:"phaseEndsAtTick"`
-	Players         []*rooms.PlayerState `json:"players"`
+	MapChecksum     uint32               `json:"mapChecksum"`
+	Players         []PlayerSnapshotLite `json:"players"`
+}
+
+// PlayerSnapshotLite keeps role/model in the fast path (used for rendering),
+// while name is sent via PlayerMetaSnapshotMsg.
+type PlayerSnapshotLite struct {
+	ID        int            `json:"id"`
+	Connected bool           `json:"connected"`
+	X         int            `json:"x"`
+	Y         int            `json:"y"`
+	Facing    rooms.DirType  `json:"facing"`
+	IntentDir *rooms.DirType `json:"intentDir,omitempty"`
+	Role      rooms.Role     `json:"role"`
+	Model     rooms.Model    `json:"model"`
+
+	Moving        bool   `json:"moving"`
+	FromX         int    `json:"fromX"`
+	FromY         int    `json:"fromY"`
+	ToX           int    `json:"toX"`
+	ToY           int    `json:"toY"`
+	MoveStartTick uint64 `json:"moveStartTick"`
+	MoveDurTicks  uint64 `json:"moveDurTicks"`
+
+	Mode                rooms.ModeType `json:"mode"`
+	NumColorChangesLeft int            `json:"numColorChangesLeft"`
+	NumWallsLeft        int            `json:"numWallsLeft"`
+	CooldownStartTick   uint64         `json:"cooldownStartTick"`
+	CooldownDurTicks    uint64         `json:"cooldownDurTicks"`
+
+	Score               int            `json:"score"`
+	SelectedItem        rooms.ItemType `json:"selectedItem"`
+	NumWallbreakersLeft int            `json:"numWallbreakersLeft"`
+	NumSillyPadsLeft    int            `json:"numSillyPadsLeft"`
+
+	Ready            bool       `json:"ready"`
+	ResultsRole      rooms.Role `json:"resultsRole"`
+	ResultsDismissed bool       `json:"resultsDismissed"`
+}
+
+type PlayerMeta struct {
+	ID    int         `json:"id"`
+	Name  string      `json:"name,omitempty"`
+	Role  rooms.Role  `json:"role"`
+	Model rooms.Model `json:"model"`
+}
+
+type PlayerMetaSnapshotMsg struct {
+	Type    string       `json:"type"` // "playerMetaSnapshot"
+	Players []PlayerMeta `json:"players"`
 }
 
 type TileMapSnapshotMsg struct {
@@ -277,18 +326,115 @@ type ChatMsg struct {
 
 // helper function to encode once
 func encodePlayerSnapshot(room *rooms.Room) ([]byte, error) {
-	players := make([]*rooms.PlayerState, 0, len(room.Players))
+	players := make([]PlayerSnapshotLite, 0, len(room.Players))
 	for _, p := range room.Players {
-		players = append(players, p)
+		players = append(players, PlayerSnapshotLite{
+			ID:                  p.ID,
+			Connected:           p.Connected,
+			X:                   p.X,
+			Y:                   p.Y,
+			Facing:              p.Facing,
+			IntentDir:           p.IntentDir,
+			Role:                p.SelectedRole,
+			Model:               p.SelectedModel,
+			Moving:              p.Moving,
+			FromX:               p.FromX,
+			FromY:               p.FromY,
+			ToX:                 p.ToX,
+			ToY:                 p.ToY,
+			MoveStartTick:       p.MoveStartTick,
+			MoveDurTicks:        p.MoveDurTicks,
+			Mode:                p.Mode,
+			NumColorChangesLeft: p.NumColorChangesLeft,
+			NumWallsLeft:        p.NumWallsLeft,
+			CooldownStartTick:   p.CooldownStartTick,
+			CooldownDurTicks:    p.CooldownDurTicks,
+			Score:               p.Score,
+			SelectedItem:        p.SelectedItem,
+			NumWallbreakersLeft: p.NumWallbreakersLeft,
+			NumSillyPadsLeft:    p.NumSillyPadsLeft,
+			Ready:               p.Ready,
+			ResultsRole:         p.ResultsRole,
+			ResultsDismissed:    p.ResultsDismissed,
+		})
 	}
 
-	msg := PlayerSnapshotMsg{Type: "playerSnapshot", Tick: room.Tick, Phase: room.Phase, PhaseEndsAtTick: room.PhaseEndsAtTick, Players: players}
+	msg := PlayerSnapshotMsg{
+		Type:            "playerSnapshot",
+		Tick:            room.Tick,
+		Phase:           room.Phase,
+		PhaseEndsAtTick: room.PhaseEndsAtTick,
+		MapChecksum:     computeMapChecksum(room.Map),
+		Players:         players,
+	}
 	return json.Marshal(msg)
+}
+
+func encodePlayerMetaSnapshot(room *rooms.Room) ([]byte, error) {
+	players := make([]PlayerMeta, 0, len(room.Players))
+	for _, p := range room.Players {
+		name := p.Name
+		if name == "" {
+			name = getPlayerName(p.ID)
+		}
+		players = append(players, PlayerMeta{
+			ID:    p.ID,
+			Name:  name,
+			Role:  p.SelectedRole,
+			Model: p.SelectedModel,
+		})
+	}
+	return json.Marshal(PlayerMetaSnapshotMsg{Type: "playerMetaSnapshot", Players: players})
 }
 
 func encodeTileMapSnapshotMsg(room *rooms.Room) ([]byte, error) {
 	msg := TileMapSnapshotMsg{Type: "tileMapSnapshot", Tick: room.Tick, Phase: room.Phase, TileMap: room.Map}
 	return json.Marshal(msg)
+}
+
+func mixChecksum(h uint32, v uint64) uint32 {
+	h ^= uint32(v) + 0x9e3779b9 + (h << 6) + (h >> 2)
+	return h
+}
+
+func computeMapChecksum(tm *rooms.TileMap) uint32 {
+	// Lightweight deterministic hash over authoritative map state for desync detection.
+	var h uint32 = 2166136261
+	h = mixChecksum(h, uint64(tm.Cols))
+	h = mixChecksum(h, uint64(tm.Rows))
+
+	for y := 0; y < tm.Rows; y++ {
+		for x := 0; x < tm.Cols; x++ {
+			t := tm.Tiles[y][x]
+			h = mixChecksum(h, uint64(t.Index))
+			if t.Changing {
+				h = mixChecksum(h, 1)
+			} else {
+				h = mixChecksum(h, 0)
+			}
+			h = mixChecksum(h, t.TileChangeStartTick)
+			h = mixChecksum(h, t.TileChangeDurTicks)
+
+			sp := tm.SillyPads[y][x]
+			if sp.Active {
+				h = mixChecksum(h, 1)
+			} else {
+				h = mixChecksum(h, 0)
+			}
+			h = mixChecksum(h, uint64(uint32(sp.OwnerId)))
+			h = mixChecksum(h, sp.ExpiresAtTick)
+		}
+	}
+
+	h = mixChecksum(h, uint64(len(tm.Wallbreakers)))
+	for _, wb := range tm.Wallbreakers {
+		h = mixChecksum(h, uint64(uint32(wb.X)))
+		h = mixChecksum(h, uint64(uint32(wb.Y)))
+		h = mixChecksum(h, wb.StartTick)
+		h = mixChecksum(h, wb.ExpiresAtTick)
+	}
+
+	return h
 }
 
 // ----------------------------  - -

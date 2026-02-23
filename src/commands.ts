@@ -21,3 +21,4 @@ export type Command =
     | { type: 'chat'; text: string }
     | { type: 'cancelCountdown' }
     | { type: 'resultsOk' }
+    | { type: 'resyncRequest' }

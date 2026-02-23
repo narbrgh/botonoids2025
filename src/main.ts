@@ -6,7 +6,7 @@ import Vector2 from './Vector2';
 import { resources } from './Resources';
 import TileMap from './TileMap';
 import Botonoid from './Botonoid';
-import type { PlayerSnapshotMsg, TileMapSnapshotMsg, TileChangeMsg , TileInitiateChangeMsg, TileChangeListMsg, SillyPadMsg, WallbreakerMsg, RoomsListOkMsg, ChatMsg} from './protocol'
+import type { PlayerSnapshotMsg, PlayerMetaSnapshotMsg, TileMapSnapshotMsg, TileChangeMsg , TileInitiateChangeMsg, TileChangeListMsg, SillyPadMsg, WallbreakerMsg, RoomsListOkMsg, ChatMsg} from './protocol'
 import type { Phase , Role , Model } from './protocol';
 import {initLobbyUI, lobbyState } from "./lobby";
 import { initRoomsBrowserUI } from "./roomsBrowser";
@@ -187,6 +187,9 @@ const resultsOkBtn = document.getElementById("results-ok-btn") as HTMLButtonElem
 let joinedRoomId: string | null = null;
 let currentPhase: Phase = 'phaseLobby'
 let latestLobbyPlayers: PlayerSnapshotMsg["players"] = [];
+const playerMetaById = new Map<number, { name?: string; role: Role; model: Model }>();
+let checksumMismatchStreak = 0;
+let lastResyncRequestAtMs = 0;
 let goOverlayUntilMs = 0;
 let pauseMenuOpen = false;
 let optionsOpen = false;
@@ -262,6 +265,18 @@ function findFirstBindingConflict(state: ControlsState): RebindConflict | null {
 
 function requestRoomsList() {
   net.sendCommand({ type: 'roomsList' });
+}
+
+function mergePlayersWithMeta(players: PlayerSnapshotMsg["players"]): PlayerSnapshotMsg["players"] {
+  return players.map((p) => {
+    const meta = playerMetaById.get(p.id);
+    return {
+      ...p,
+      name: p.name ?? meta?.name,
+      role: p.role ?? meta?.role ?? "observer",
+      model: p.model ?? meta?.model ?? "alphanoid",
+    };
+  });
 }
 
 const roomsBrowserUI = initRoomsBrowserUI({
@@ -791,20 +806,27 @@ net.onChat = (m: ChatMsg) => {
   lobbyUI.appendChat(`[${m.name}] ${m.text}`);
 };
 
+net.onPlayerMetaSnapshot = (m: PlayerMetaSnapshotMsg) => {
+  for (const p of m.players) {
+    playerMetaById.set(p.id, { name: p.name, role: p.role, model: p.model });
+  }
+};
+
 net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
-  latestLobbyPlayers = s.players;
+  const players = mergePlayersWithMeta(s.players);
+  latestLobbyPlayers = players;
   if (currentPhase === "phaseCountdown" && s.phase === "phasePlaying") {
     goOverlayUntilMs = performance.now() + 700;
   }
 
   handlePhaseChange(s.phase);
-  const meFromSnapshot = (net.playerId === null) ? undefined : s.players.find((p) => p.id === net.playerId);
+  const meFromSnapshot = (net.playerId === null) ? undefined : players.find((p) => p.id === net.playerId);
   localResultsDismissed = !!meFromSnapshot?.resultsDismissed;
   if (resultsOkBtn) resultsOkBtn.disabled = localResultsDismissed;
-  lobbyUI.setPlayers(s.players);
+  lobbyUI.setPlayers(players);
   lobbyUI.setReadyState(!!meFromSnapshot?.ready);
   const unavailable: Role[] = [];
-  for (const p of s.players) {
+  for (const p of players) {
     if (p.id === net.playerId) continue;
     if (p.role === "goldBot" || p.role === "pinkBot" || p.role === "whiteBot" || p.role === "blackBot") {
       unavailable.push(p.role);
@@ -817,7 +839,7 @@ net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
   secondsLeft = Math.ceil(clock.ticksToSeconds(ticksLeft));
 
 
-  for (const p of s.players) {
+  for (const p of players) {
     seen.add(p.id);
 
     let bot = botsById.get(p.id);
@@ -844,13 +866,29 @@ net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
 
   clock.updateSnapshot(s.tick, receivedAtMs);
 
+  if (tileMap) {
+    const localChecksum = tileMap.computeChecksum();
+    if (localChecksum === s.mapChecksum) {
+      checksumMismatchStreak = 0;
+    } else {
+      checksumMismatchStreak++;
+      const now = performance.now();
+      // Require consecutive mismatches and rate-limit requests to avoid noise.
+      if (checksumMismatchStreak >= 2 && (now - lastResyncRequestAtMs) >= 2000) {
+        net.sendCommand({ type: "resyncRequest" });
+        lastResyncRequestAtMs = now;
+        checksumMismatchStreak = 0;
+      }
+    }
+  }
+
   //optional: remove disconnected players
   for (const [id] of botsById) {
     if (!seen.has(id)) botsById.delete(id);
   }
 
   if (s.phase === "phaseFinished") {
-    renderResultsOverlay(s.players);
+    renderResultsOverlay(players);
   }
 };
 
@@ -861,6 +899,7 @@ net.onTileMapSnapshot = (s: TileMapSnapshotMsg) => {
 
   clock.updateSnapshot(s.tick, receivedAtMs);
   if (tileMap) {tileMap.setAuthoritativeStateFromTileMapSnapshot(s.tileMap);}
+  checksumMismatchStreak = 0;
 
 };
 

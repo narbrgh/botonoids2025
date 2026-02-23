@@ -174,11 +174,18 @@ func runGameLoop(
 
 				// Send an immediate authoritative state to newly registered client.
 				// This avoids join-time UI stale states (e.g., ready indicators).
+				if b, err := encodePlayerMetaSnapshot(room); err == nil {
+					_ = trySend(r.Client, b)
+				}
 				if b, err := encodePlayerSnapshot(room); err == nil {
 					_ = trySend(r.Client, b)
 				}
 				if b, err := encodeTileMapSnapshotMsg(room); err == nil {
 					_ = trySend(r.Client, b)
+				}
+				// Existing clients need metadata for newly connected players as well.
+				if b, err := encodePlayerMetaSnapshot(room); err == nil {
+					broadcast(room, b)
 				}
 			case u := <-unregCh:
 				if cl, ok := room.Clients[u.PlayerID]; ok {
@@ -422,17 +429,13 @@ func runGameLoop(
 
 		// 7) broadcast snapshots
 
-		// player snapshot is broadcasted every tick
+		//broadcast player snapshot every tick
 		if b, err := encodePlayerSnapshot(room); err == nil {
 			broadcast(room, b)
 		}
 
-		// tile snapshot is broadcasted every 20 ticks
-		if room.Tick%20 == 0 {
-			if b, err := encodeTileMapSnapshotMsg(room); err == nil {
-				broadcast(room, b)
-			}
-		}
+		// Full tilemap snapshots are sent on join/phase-change only.
+		// During gameplay, clients receive tile deltas (tileChange/tileChangeList).
 
 		room.Tick++
 	}

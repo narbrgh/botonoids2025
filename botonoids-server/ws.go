@@ -15,6 +15,7 @@ import (
 // ─────────────────────────────
 var upgrader = websocket.Upgrader{ // This function controls whether cross-origin WebSocket requests are allowed
 	CheckOrigin: func(r *http.Request) bool { return true }, // returning true means "accept all origins." OK for now (dev), but later will lock down for production
+	EnableCompression: true,
 }
 
 // ------------------------------
@@ -53,6 +54,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) { // This func is called 
 		log.Println("upgrade:", err) // If the upgrade fails, log the error and exit.
 		return
 	}
+	_ = c.SetCompressionLevel(3)
 
 	defer c.Close() // Ensures the WebSocket connection is closed when this function returns.
 	//NOTE: defer does not run until AFTER the function returns (Golang syntax)

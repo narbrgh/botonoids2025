@@ -14,7 +14,7 @@ import (
 // WebSocket upgrader
 // ─────────────────────────────
 var upgrader = websocket.Upgrader{ // This function controls whether cross-origin WebSocket requests are allowed
-	CheckOrigin: func(r *http.Request) bool { return true }, // returning true means "accept all origins." OK for now (dev), but later will lock down for production
+	CheckOrigin:       func(r *http.Request) bool { return true }, // returning true means "accept all origins." OK for now (dev), but later will lock down for production
 	EnableCompression: true,
 }
 
@@ -121,23 +121,32 @@ func wsHandler(w http.ResponseWriter, r *http.Request) { // This func is called 
 		}
 		log.Printf("[ws] got msg from player=%d type=%s seq = %d cmd = %s", playerID, m.Type, m.Seq, string(m.Cmd))
 
-		if m.Type == "command" {
-			cmdType, err := peekCmdType(m.Cmd)
-			if err == nil {
-				if handleRoomBrowserCommand(client, playerID, cmdType, m.Cmd) {
-					continue
-				}
-			}
+		if m.Type != "command" {
+			log.Printf("[ws] ignoring non-command envelope player=%d type=%q", playerID, m.Type)
+			continue
+		}
+
+		cmdType, err := peekCmdType(m.Cmd)
+		if err != nil || !isKnownCommandType(cmdType) {
+			log.Printf("[ws] rejecting invalid command player=%d err=%v cmd=%s", playerID, err, string(m.Cmd))
+			sendJSON(client, map[string]any{"type": "room:error", "msg": "invalid command"})
+			continue
+		}
+
+		if handleRoomBrowserCommand(client, playerID, cmdType, m.Cmd) {
+			continue
 		}
 
 		roomID := managedGetPlayerRoomID(playerID)
-		if roomID != "" {
-			runtimeRouteCommand(roomID, QueuedCmd{
-				PlayerID: playerID,
-				Seq:      m.Seq,
-				Cmd:      m.Cmd,
-			})
+		if roomID == "" {
+			sendJSON(client, map[string]any{"type": "room:error", "msg": "join a room first"})
+			continue
 		}
+		runtimeRouteCommand(roomID, QueuedCmd{
+			PlayerID: playerID,
+			Seq:      m.Seq,
+			Cmd:      m.Cmd,
+		})
 
 		/* changing all write JSON calls to the sendJSON function (Gorilla Websockets doesn't want WriteJSON from multiple gofuncs, because if both arrive at once, it can cause issues)
 		_ = c.WriteJSON(ServerMsg{ // Send acknowledgement ("ack"). This confirms the receipt of the command, but does NOT mean that it was necessarily applied

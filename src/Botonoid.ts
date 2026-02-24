@@ -326,4 +326,10 @@ export default class Botonoid {
     return this.connected;
   }
 
+  getDrawRow(nowMs: number): number {
+    const p = this.getDrawPx(nowMs);
+    const row = Math.floor((p.y - Y_DRAW_OFFSET) / this.tileSize);
+    return Math.max(0, row);
+  }
+
 }

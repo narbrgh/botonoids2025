@@ -105,14 +105,42 @@ export function initLobbyUI(onEvent: (e: LobbyEvent) => void): LobbyUIController
         optionsBtn.addEventListener("click", () => onEvent({ type: "options" }));
     }
 
+    const toggleReady = () => {
+        if (!readyBtn || lobbyState.role === null) return;
+        lobbyState.ready = !lobbyState.ready;
+        onEvent({type: "ready", ready: lobbyState.ready , role: lobbyState.role});
+        readyBtn.classList.toggle("selected",lobbyState.ready);
+        readyBtn.textContent = lobbyState.ready ? "Ready ✔" : "Ready";
+    };
+
     if (readyBtn) {
+        let suppressClickUntil = 0;
+        const triggerReady = () => {
+            if (performance.now() < suppressClickUntil) return;
+            suppressClickUntil = performance.now() + 250;
+            toggleReady();
+        };
         readyBtn.addEventListener("click", () => {
-            if (lobbyState.role === null) return;
-            lobbyState.ready = !lobbyState.ready;
-            onEvent({type: "ready", ready: lobbyState.ready , role: lobbyState.role});
-            readyBtn.classList.toggle("selected",lobbyState.ready);
-            readyBtn.textContent = lobbyState.ready ? "Ready ✔" : "Ready";
+            triggerReady();
         });
+        readyBtn.addEventListener("pointerup", (ev) => {
+            // Safari can dispatch pointerup without a reliable click on some UI states.
+            if (ev.pointerType === "touch") {
+                ev.preventDefault();
+                suppressClickUntil = performance.now() + 800;
+                triggerReady();
+                return;
+            }
+            if (ev.pointerType === "mouse") {
+                triggerReady();
+            }
+        });
+        // Safari/iOS can emit touchend followed by a synthetic click.
+        readyBtn.addEventListener("touchend", (ev) => {
+            ev.preventDefault();
+            suppressClickUntil = performance.now() + 800;
+            triggerReady();
+        }, { passive: false });
     }
 
     //listener for "role" buttons (gold, pink, black, white, random, observer)

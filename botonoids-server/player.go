@@ -129,13 +129,19 @@ func applyQueuedCmdToRoom(room *rooms.Room, qc QueuedCmd) {
 			if err != nil {
 				return
 			}
+			if !isValidRole(cmd.Role) {
+				if cl, ok := room.Clients[qc.PlayerID]; ok {
+					sendJSON(cl, ServerMsg{Type: "roleInvalid", PlayerID: qc.PlayerID, Msg: "invalid role"})
+				}
+				return
+			}
 
 			roleChanged := p.SelectedRole != cmd.Role
 			if roleChanged {
 				releaseRole(qc.PlayerID, p.SelectedRole)
 				if !tryClaimRole(qc.PlayerID, cmd.Role) {
 					if cl, ok := room.Clients[qc.PlayerID]; ok {
-						sendJSON(cl, ServerMsg{Type: "roleInvalid", Msg: "role taken"})
+						sendJSON(cl, ServerMsg{Type: "roleInvalid", PlayerID: qc.PlayerID, Msg: "role taken"})
 					}
 					return
 				}
@@ -178,6 +184,18 @@ func applyQueuedCmdToRoom(room *rooms.Room, qc QueuedCmd) {
 				}
 				return
 			}
+			if !isValidRole(cmd.Role) {
+				if cl, ok := room.Clients[qc.PlayerID]; ok {
+					sendJSON(cl, ServerMsg{Type: "roleInvalid", PlayerID: qc.PlayerID, Msg: "invalid role"})
+				}
+				return
+			}
+			if !isValidModel(cmd.Model) {
+				if cl, ok := room.Clients[qc.PlayerID]; ok {
+					sendJSON(cl, map[string]any{"type": "room:error", "msg": "invalid model"})
+				}
+				return
+			}
 
 			if p.SelectedRole != cmd.Role {
 				releaseRole(qc.PlayerID, p.SelectedRole)
@@ -185,7 +203,7 @@ func applyQueuedCmdToRoom(room *rooms.Room, qc QueuedCmd) {
 
 			if !tryClaimRole(qc.PlayerID, cmd.Role) {
 				if cl, ok := room.Clients[qc.PlayerID]; ok {
-					sendJSON(cl, ServerMsg{Type: "roleInvalid", Msg: "role taken"})
+					sendJSON(cl, ServerMsg{Type: "roleInvalid", PlayerID: qc.PlayerID, Msg: "role taken"})
 				}
 				return
 			}
@@ -313,7 +331,9 @@ func applyQueuedCmdToRoom(room *rooms.Room, qc QueuedCmd) {
 				}
 			}
 		case rooms.ItemGhost:
-			p.SetGhost(room.Tick)
+			if setPlayerGhostAndResetFoundations(room, p) {
+				broadcastPendingTileChanges(room)
+			}
 		}
 
 	case "input":

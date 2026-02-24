@@ -499,7 +499,7 @@ export default class TileMap {
         ctx.restore();
     }
 
-    draw(ctx: CanvasRenderingContext2D, nowMs: number): void {
+    drawBackground(ctx: CanvasRenderingContext2D, nowMs: number): void {
         const estTick = this.getEstimatedTick(nowMs)
         // if the underlying resource isn't loaded yet, Sprite.drawImage won't draw it
         for (let r = 0; r < this.rows; r++) {
@@ -533,40 +533,71 @@ export default class TileMap {
                         this.tileSprite.drawImageWithOpacity(ctx, x, y, alpha);
                     }
                 }
-
-                //now draw silly pad
-                if (this.sillyPads[r][c].active) {
-                    this.sillyPadSprite.frame = this.sillyPads[r][c].drawIndex
-                    
-                    const alpha = this.getSillyPadAlpha(nowMs, this.sillyPads[r][c].expiresAtTick); 
-                    this.sillyPadSprite.drawImageWithOpacity(ctx,x,y, alpha)
-                }
-
             } // next c
         } // next r
+    }
 
-        //now draw wallbreakers
+    drawRowSillyPads(ctx: CanvasRenderingContext2D, nowMs: number, row: number): void {
+        if (row < 0 || row >= this.rows) {
+            return;
+        }
+
+        for (let c = 0; c < this.cols; c++) {
+            if (!this.sillyPads[row][c].active) {
+                continue;
+            }
+            this.sillyPadSprite.frame = this.sillyPads[row][c].drawIndex;
+            const alpha = this.getSillyPadAlpha(nowMs, this.sillyPads[row][c].expiresAtTick);
+            const x = c * this.tileSize + X_DRAW_OFFSET;
+            const y = row * this.tileSize + Y_DRAW_OFFSET;
+            this.sillyPadSprite.drawImageWithOpacity(ctx, x, y, alpha);
+        }
+    }
+
+    drawRowBombs(ctx: CanvasRenderingContext2D, nowMs: number, row: number): void {
+        if (row < 0 || row >= this.rows) {
+            return;
+        }
+
+        const estTick = this.getEstimatedTick(nowMs);
         for (const wb of this.wallbreakers) {
+            if (wb.y !== row) {
+                continue;
+            }
             const xD = wb.x * this.tileSize + X_DRAW_OFFSET;
             const yD = wb.y * this.tileSize + Y_DRAW_OFFSET;
 
-            if (wb.expiresAtTick - BOMB_EXPLODE_TICKS > this.getEstimatedTick(nowMs)) { // if there is more than 0.1 seconds in the bomb's life
+            if (wb.expiresAtTick - BOMB_EXPLODE_TICKS > estTick) { // if there is more than 0.1 seconds in the bomb's life
                 const tint = this.getTintAlpha(wb.startTick, wb.expiresAtTick, nowMs)
                 this.wallbreakerSprite.drawImageWithTint(ctx, xD, yD, "#ff00007c", tint, 1)
-            } else if (this.getEstimatedTick(nowMs) > wb.expiresAtTick) {
+            } else if (estTick > wb.expiresAtTick) {
                 //Expired; do not draw
             } else { // <= 0.1 seconds left!
-                const p = (wb.expiresAtTick - this.getEstimatedTick(nowMs))/BOMB_EXPLODE_TICKS // 0..1
+                const p = (wb.expiresAtTick - estTick)/BOMB_EXPLODE_TICKS // 0..1
                 const pp = 1-Math.max(0, Math.min(1, p));
                 this.wallbreakerSprite.drawImageWithTint(ctx, xD, yD, "#ffff00", pp*pp, 1)
 
             }
-
         }
+    }
 
+    drawRowItems(ctx: CanvasRenderingContext2D, nowMs: number, row: number): void {
+        this.drawRowSillyPads(ctx, nowMs, row);
+        this.drawRowBombs(ctx, nowMs, row);
+    }
+
+    drawExplosions(ctx: CanvasRenderingContext2D, nowMs: number): void {
         for (const e of this.explosions) {
             this.drawExplosion(ctx, nowMs, e);
         }
+    }
+
+    draw(ctx: CanvasRenderingContext2D, nowMs: number): void {
+        this.drawBackground(ctx, nowMs);
+        for (let row = 0; row < this.rows; row++) {
+            this.drawRowItems(ctx, nowMs, row);
+        }
+        this.drawExplosions(ctx, nowMs);
     }
 
     update(nowMs: number): void {

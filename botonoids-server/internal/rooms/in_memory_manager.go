@@ -259,6 +259,14 @@ func (m *InMemoryManager) GetRoomRef(roomID string) (*Room, *AppError) {
 	return room, nil
 }
 
+// ForgetPlayer removes player-to-room bookkeeping for a disconnected player.
+// It does not mutate room player state.
+func (m *InMemoryManager) ForgetPlayer(playerID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.playerToRoom, playerID)
+}
+
 // CloseRoomIfAllDisconnected removes a room if every player in the room is disconnected.
 // Returns true when the room was removed.
 func (m *InMemoryManager) CloseRoomIfAllDisconnected(roomID string) bool {

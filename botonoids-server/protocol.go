@@ -66,6 +66,38 @@ func decodeReadyCmd(raw json.RawMessage) (ReadyCmd, error) {
 	return cmd, err
 }
 
+func isValidRole(role rooms.Role) bool {
+	switch role {
+	case rooms.RoleGoldBot, rooms.RolePinkBot, rooms.RoleWhiteBot, rooms.RoleBlackBot, rooms.RoleRandomBot, rooms.RoleObserver:
+		return true
+	default:
+		return false
+	}
+}
+
+func isValidModel(model rooms.Model) bool {
+	switch model {
+	case rooms.ModelAlphanoid, rooms.ModelHerbanoid, rooms.ModelBarvinoid, rooms.ModelRandomnoid:
+		return true
+	default:
+		return false
+	}
+}
+
+func isKnownCommandType(typ string) bool {
+	switch typ {
+	case "roomsList", "roomCreate", "roomJoin", "roomLeave",
+		"ready", "roleSelect", "name", "chat",
+		"input", "move", "facing",
+		"action", "actionDown", "actionUp",
+		"changeItem", "useItem",
+		"cancelCountdown", "resultsOk", "resyncRequest":
+		return true
+	default:
+		return false
+	}
+}
+
 //////000000000000-----------------
 // server -> client messages regarding lobby messages (role not available etc)
 // -0--- -00- 0-32r40-230-30-4 230- asd-0fdslk ;fadsjlk

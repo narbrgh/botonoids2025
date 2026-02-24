@@ -4,6 +4,7 @@ import (
 	"botonoids-server/internal/rooms"
 	"encoding/json"
 	"log"
+	"strconv"
 	"time"
 )
 
@@ -30,6 +31,27 @@ func broadcast(room *rooms.Room, msg []byte) {
 	for _, cl := range room.Clients {
 		_ = trySend(cl, msg)
 	}
+}
+
+func broadcastPendingTileChanges(room *rooms.Room) {
+	changes := room.Map.PendingChanges()
+	if len(changes) == 0 {
+		return
+	}
+	msg := TileChangeListMsg{Type: "tileChangeList", TileChangeList: changes}
+	if b, err := json.Marshal(msg); err == nil {
+		broadcast(room, b)
+	}
+	room.Map.ResetChangeMap()
+}
+
+func setPlayerGhostAndResetFoundations(room *rooms.Room, p *rooms.PlayerState) bool {
+	if p.Mode == rooms.Ghost {
+		return false
+	}
+	room.Map.ResetFoundationTiles(p.FoundationIndex)
+	p.SetGhost(room.Tick)
+	return true
 }
 
 func CheckForWallBuild(room *rooms.Room, p *rooms.PlayerState) bool {
@@ -74,11 +96,7 @@ func CheckForWallBuild(room *rooms.Room, p *rooms.PlayerState) bool {
 			}
 
 			//now send a message (this will broadcast the walls built, and the change from foundation tiles to regular colors)
-			msg := TileChangeListMsg{Type: "tileChangeList", TileChangeList: room.Map.PendingChanges()}
-			if b, err := json.Marshal(msg); err == nil {
-				broadcast(room, b)
-			}
-			room.Map.ResetChangeMap()
+			broadcastPendingTileChanges(room)
 
 		}
 	}
@@ -204,8 +222,47 @@ func runGameLoop(
 					delete(room.Clients, u.PlayerID)
 				}
 				if p, ok := room.Players[u.PlayerID]; ok {
-					p.Connected = false
-					p.Ready = false
+					if room.Phase == rooms.PhaseLobby {
+						// In lobby, treat disconnect like a leave so stale offline slots do not persist.
+						if p.SelectedRole == rooms.RoleGoldBot || p.SelectedRole == rooms.RolePinkBot || p.SelectedRole == rooms.RoleWhiteBot || p.SelectedRole == rooms.RoleBlackBot {
+							roleStillTaken := false
+							for id, other := range room.Players {
+								if id == u.PlayerID {
+									continue
+								}
+								if other.SelectedRole == p.SelectedRole {
+									roleStillTaken = true
+									break
+								}
+							}
+							room.RoleTaken[p.SelectedRole] = roleStillTaken
+						}
+						delete(room.Players, u.PlayerID)
+						managedForgetPlayerRoom(u.PlayerID)
+
+						if room.HostID == strconv.Itoa(u.PlayerID) {
+							room.HostID = ""
+							for id := range room.Players {
+								room.HostID = strconv.Itoa(id)
+								break
+							}
+						}
+
+						// Force fresh snapshots because player deltas do not encode removals.
+						if b, err := encodePlayerMetaSnapshot(room); err == nil {
+							broadcast(room, b)
+						}
+						if b, err := encodePlayerStatusSnapshot(room); err == nil {
+							broadcast(room, b)
+						}
+						if b, err := encodePlayerSnapshot(room); err == nil {
+							broadcast(room, b)
+						}
+						prevPlayerWireState = map[int]PlayerSnapshotLite{}
+					} else {
+						p.Connected = false
+						p.Ready = false
+					}
 				}
 				if managedCloseRoomIfAllDisconnected(room.ID) {
 					stopRoomRunner(room.ID)
@@ -290,11 +347,7 @@ func runGameLoop(
 								p.NumWallsLeft = comboLength - 3 // you can build 3 less walls than what your combo was
 
 								//now send a message
-								msg := TileChangeListMsg{Type: "tileChangeList", TileChangeList: room.Map.PendingChanges()}
-								if b, err := json.Marshal(msg); err == nil {
-									broadcast(room, b)
-								}
-								room.Map.ResetChangeMap()
+								broadcastPendingTileChanges(room)
 
 								// Now need to change the botonoid mode to WallBuilding
 
@@ -411,11 +464,7 @@ func runGameLoop(
 
 		if tileChanged {
 			// send a message (this will broadcast the wall destroyed
-			msg := TileChangeListMsg{Type: "tileChangeList", TileChangeList: room.Map.PendingChanges()}
-			if b, err := json.Marshal(msg); err == nil {
-				broadcast(room, b)
-			}
-			room.Map.ResetChangeMap()
+			broadcastPendingTileChanges(room)
 			tileChanged = false
 		}
 
@@ -423,13 +472,19 @@ func runGameLoop(
 			p.UpdateScore(destroyedTiles)
 		}
 
+		resetAnyFoundationsFromGhost := false
 		for _, p := range Explosions {
 			for _, q := range room.Players {
 				dist := absInt(p.X-q.X) + absInt(p.Y-q.Y)
 				if dist <= rooms.ExplosionRadius {
-					q.SetGhost(room.Tick)
+					if setPlayerGhostAndResetFoundations(room, q) {
+						resetAnyFoundationsFromGhost = true
+					}
 				}
 			}
+		}
+		if resetAnyFoundationsFromGhost {
+			broadcastPendingTileChanges(room)
 		}
 
 		for _, p := range room.Players {

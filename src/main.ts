@@ -78,6 +78,8 @@ const audioUrls = {
   beep: "/sfx/beep.wav",
   bang: "/sfx/bang.wav",
   tick: "/sfx/tick.wav",
+  ghost: "/sfx/ghost.wav",
+  unghost: "/sfx/unghost.wav",
 } as const;
 
 audio.registerMusic("menu", audioUrls.theme, { loop: true, volume: 0.6 });
@@ -94,6 +96,8 @@ audio.loadSfx("color", audioUrls.color);
 audio.loadSfx("beep", audioUrls.beep);
 audio.loadSfx("bang", audioUrls.bang);
 audio.loadSfx("tick", audioUrls.tick);
+audio.loadSfx("ghost", audioUrls.ghost);
+audio.loadSfx("unghost", audioUrls.unghost);
 audio.setMusicVolume(1);
 audio.setSfxVolume(1);
 
@@ -894,7 +898,15 @@ function applyPlayerWireState(tick: number, phase: Phase, phaseEndsAtTick: numbe
     
     numActivePlayers = [...botsById.values()].filter(b => b.getRole() !== "observer").length;
 
+    const wasGhost = bot.getMode() === "ghost";
     bot.setAuthoritativeStateFromPlayerSnapshot(p);
+    const isGhost = bot.getMode() === "ghost";
+    if (!wasGhost && isGhost) {
+      audio.playSfx("ghost", { volume: 0.9, pitchMin: 1, pitchMax: 1 });
+    }
+    if (wasGhost && !isGhost) {
+      audio.playSfx("unghost", { volume: 0.9, pitchMin: 1, pitchMax: 1 });
+    }
     
   }
 
@@ -1226,12 +1238,7 @@ function render() {
       break;
     }
     case 'phaseCountdown': {
-      
-      if (tileMap) {tileMap.draw(ctx, nowMs);}
-
-      for (const bot of botsById.values()) {
-        bot.draw(ctx, nowMs);
-      }
+      drawMatchPlayfield(nowMs);
 
       // draw HUD
       const hudY = Y_DRAW_OFFSET + tileSize * rows
@@ -1250,11 +1257,7 @@ function render() {
     }
     
     case 'phasePlaying': {
-      if (tileMap) {tileMap.draw(ctx, nowMs);}
-
-      for (const bot of botsById.values()) {
-        bot.draw(ctx, nowMs);
-      }
+      drawMatchPlayfield(nowMs);
 
       // draw HUD
       const hudY = Y_DRAW_OFFSET + tileSize * rows
@@ -1271,10 +1274,7 @@ function render() {
       break;
     }
     case 'phaseFinished': {
-      if (tileMap) {tileMap.draw(ctx, nowMs);}
-      for (const bot of botsById.values()) {
-        bot.draw(ctx, nowMs);
-      }
+      drawMatchPlayfield(nowMs);
       const hudY = Y_DRAW_OFFSET + tileSize * rows;
       hud.draw({x: 0, y: hudY, width: canvas.width, height: canvas.height - hudY, timeLeft: secondsLeft, botsById, localPlayerId: net.playerId, numActivePlayers, nowMs});
       renderResultsOverlay(latestLobbyPlayers);
@@ -1282,6 +1282,37 @@ function render() {
     }
   }
   
+}
+
+function drawMatchPlayfield(nowMs: number): void {
+  if (!tileMap) {
+    return;
+  }
+
+  tileMap.drawBackground(ctx, nowMs);
+
+  const botsByRow: Botonoid[][] = Array.from({ length: Math.max(0, rows) }, () => []);
+  for (const bot of botsById.values()) {
+    const row = Math.min(rows - 1, bot.getDrawRow(nowMs));
+    if (row < 0) {
+      continue;
+    }
+    botsByRow[row].push(bot);
+  }
+
+  for (let row = 0; row < rows; row++) {
+    tileMap.drawRowSillyPads(ctx, nowMs, row);
+
+    const bots = botsByRow[row];
+    bots.sort((a, b) => a.getId() - b.getId());
+    for (const bot of bots) {
+      bot.draw(ctx, nowMs); // includes bot numbers/overlay
+    }
+
+    tileMap.drawRowBombs(ctx, nowMs, row);
+  }
+
+  tileMap.drawExplosions(ctx, nowMs);
 }
 
 function drawText(

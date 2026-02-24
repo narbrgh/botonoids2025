@@ -128,6 +128,13 @@ func managedGetPlayerRoomID(playerID int) string {
 	return managedPlayerRoom[playerID]
 }
 
+func managedForgetPlayerRoom(playerID int) {
+	managedRoomMu.Lock()
+	defer managedRoomMu.Unlock()
+	delete(managedPlayerRoom, playerID)
+	roomManager.ForgetPlayer(fmt.Sprintf("%d", playerID))
+}
+
 func managedLeavePlayer(playerID int) {
 	_ = managedLeaveRoom(playerID)
 }

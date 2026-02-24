@@ -771,6 +771,9 @@ function handlePhaseChange(next: Phase) {
     //reset the bools for the countdown sound effects
     playedCountdownNumber[0] = playedCountdownNumber[1] = playedCountdownNumber[2] = playedCountdownNumber[3] = false
   }
+  if (prevPhase === "phaseCountdown" && next === "phasePlaying") {
+    goOverlayUntilMs = performance.now() + 700;
+  }
   if (next === "phaseFinished" && prevPhase !== "phaseFinished") {
     net.sendCommand({ type: "input", dir: null });
     lastDir = null;
@@ -854,9 +857,6 @@ function applyPlayerWireState(tick: number, phase: Phase, phaseEndsAtTick: numbe
   const players = getMergedPlayers();
   latestLobbyPlayers = players;
   currentPhaseEndsAtTick = phaseEndsAtTick;
-  if (currentPhase === "phaseCountdown" && phase === "phasePlaying") {
-    goOverlayUntilMs = performance.now() + 700;
-  }
 
   handlePhaseChange(phase);
   const meFromSnapshot = (net.playerId === null) ? undefined : players.find((p) => p.id === net.playerId);
@@ -962,7 +962,7 @@ net.onPlayerDelta = (m: PlayerDeltaMsg) => {
 };
 
 net.onTileMapSnapshot = (s: TileMapSnapshotMsg) => {
-  currentPhase = s.phase;
+  handlePhaseChange(s.phase);
 
   const receivedAtMs = performance.now()
 
@@ -1268,7 +1268,7 @@ function render() {
 
       if (nowMs < goOverlayUntilMs) {
         drawText(ctx, "Go!", canvas.width / 2, canvas.height / 2 - 10, {
-          font: '700 160px "Goldman"',
+          font: '700 176px "Goldman"',
           stroke: '#000',
           strokeWidth: 12,
         });

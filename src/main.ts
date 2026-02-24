@@ -795,6 +795,9 @@ net.onHello = () => {
 
 net.onRoomsList = (m: RoomsListOkMsg) => {
   joinedRoomId = m.yourRoomId ?? null;
+  if (!joinedRoomId) {
+    handlePhaseChange("phaseLobby");
+  }
   if (joinedRoomId) {
     const room = m.rooms.find((r) => r.id === joinedRoomId);
     if (room) lobbyUI.setRoomName(room.name);
@@ -806,6 +809,7 @@ net.onRoomsList = (m: RoomsListOkMsg) => {
 };
 
 net.onRoomCreateOk = (m) => {
+  handlePhaseChange("phaseLobby");
   joinedRoomId = m.roomId;
   lobbyUI.resetSelection();
   roomsBrowserUI.setError("");
@@ -814,6 +818,7 @@ net.onRoomCreateOk = (m) => {
 };
 
 net.onRoomJoinOk = (m) => {
+  handlePhaseChange("phaseLobby");
   joinedRoomId = m.roomId;
   lobbyUI.resetSelection();
   roomsBrowserUI.setError("");
@@ -822,6 +827,7 @@ net.onRoomJoinOk = (m) => {
 };
 
 net.onRoomLeaveOk = () => {
+  handlePhaseChange("phaseLobby");
   joinedRoomId = null;
   lobbyUI.resetSelection();
   roomsBrowserUI.setError("");

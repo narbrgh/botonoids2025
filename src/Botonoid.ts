@@ -332,4 +332,9 @@ export default class Botonoid {
     return Math.max(0, row);
   }
 
+  getDrawCenterPx(nowMs: number): Vector2 {
+    const p = this.getDrawPx(nowMs);
+    return new Vector2(p.x + this.tileSize / 2, p.y + this.tileSize / 2);
+  }
+
 }

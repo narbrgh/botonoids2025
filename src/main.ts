@@ -15,7 +15,7 @@ import HUD from "./hud";
 
 import {frameForBot, BOT_SHEET} from './botonoidSheet'
 
-import { TILE_SIZE, FRAME_SIZE, Y_DRAW_OFFSET } from './Constants';
+import { TILE_SIZE, FRAME_SIZE, X_DRAW_OFFSET, Y_DRAW_OFFSET } from './Constants';
 
 import type { DirType } from './protocol';
 
@@ -678,6 +678,7 @@ const wallbreakerSprite = new Sprite({
 
 const clock = new ServerClock();
 let secondsLeft = 540;
+let currentPhaseEndsAtTick = 0;
 
 const getEstimatedTick = clock.estimatedTick.bind(clock);
 //const tileMap = new TileMap({cols, rows, tileSize: TILE_SIZE, tileSprite, getEstimatedTick });
@@ -852,6 +853,7 @@ net.onPlayerStatusSnapshot = (m: PlayerStatusSnapshotMsg) => {
 function applyPlayerWireState(tick: number, phase: Phase, phaseEndsAtTick: number, mapChecksum: number) {
   const players = getMergedPlayers();
   latestLobbyPlayers = players;
+  currentPhaseEndsAtTick = phaseEndsAtTick;
   if (currentPhase === "phaseCountdown" && phase === "phasePlaying") {
     goOverlayUntilMs = performance.now() + 700;
   }
@@ -1239,6 +1241,7 @@ function render() {
     }
     case 'phaseCountdown': {
       drawMatchPlayfield(nowMs);
+      drawCountdownSpotlight(nowMs);
 
       // draw HUD
       const hudY = Y_DRAW_OFFSET + tileSize * rows
@@ -1313,6 +1316,60 @@ function drawMatchPlayfield(nowMs: number): void {
   }
 
   tileMap.drawExplosions(ctx, nowMs);
+}
+
+function drawCountdownSpotlight(nowMs: number): void {
+  if (currentPhase !== "phaseCountdown" || cols <= 0 || rows <= 0) {
+    return;
+  }
+
+  const localPlayerId = net.playerId;
+  if (localPlayerId === null) {
+    return;
+  }
+
+  const localBot = botsById.get(localPlayerId);
+  if (!localBot || localBot.getRole() === "observer") {
+    return;
+  }
+
+  const center = localBot.getDrawCenterPx(nowMs);
+  const playfieldX = X_DRAW_OFFSET;
+  const playfieldY = Y_DRAW_OFFSET;
+  const playfieldW = cols * tileSize;
+  const playfieldH = rows * tileSize;
+
+  const finalRadius = Math.max(
+    Math.hypot(center.x - playfieldX, center.y - playfieldY),
+    Math.hypot(center.x - (playfieldX + playfieldW), center.y - playfieldY),
+    Math.hypot(center.x - playfieldX, center.y - (playfieldY + playfieldH)),
+    Math.hypot(center.x - (playfieldX + playfieldW), center.y - (playfieldY + playfieldH)),
+  ) + 4;
+
+  const baseRadius = 40;
+  const ticksLeft = Math.max(0, currentPhaseEndsAtTick - getEstimatedTick(nowMs));
+  const preciseSecondsLeft = clock.ticksToSeconds(ticksLeft);
+
+  let radius = baseRadius;
+  if (preciseSecondsLeft <= 1) {
+    const t = Math.max(0, Math.min(1, 1 - preciseSecondsLeft));
+    const rapid = t * t;
+    radius = baseRadius + (finalRadius - baseRadius) * rapid;
+  }
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(playfieldX, playfieldY, playfieldW, playfieldH);
+  ctx.clip();
+
+  // Fill map rectangle except the spotlight circle.
+  ctx.beginPath();
+  ctx.rect(playfieldX, playfieldY, playfieldW, playfieldH);
+  ctx.moveTo(center.x + radius, center.y);
+  ctx.arc(center.x, center.y, radius, 0, Math.PI * 2, true);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.38)';
+  ctx.fill('evenodd');
+  ctx.restore();
 }
 
 function drawText(

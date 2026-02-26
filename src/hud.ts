@@ -14,6 +14,9 @@ const SINGLE_PLAYER_CARD_RIGHT_SHIFT = 200
 const SCORE_BAR_X_OFFSET = 13
 const SCORE_BAR_DRAW_WIDTH = 100
 const SCORE_TEXT_RIGHT_BUFFER = 70
+const TIME_LEFT_X_OFFSET = 90
+const TIME_LEFT_SAFE_WIDTH = 120
+const PLAYER_CARD_LEFT_NUDGE = 20
 
 export default class HUD {
     private readonly ctx: CanvasRenderingContext2D;
@@ -137,24 +140,22 @@ export default class HUD {
 
         }
         
-        if (numActivePlayers === 1) {
-            const scoreSectionRight = x + X_DRAW_OFFSET + SCORE_BAR_X_OFFSET + SCORE_BAR_DRAW_WIDTH + SCORE_TEXT_RIGHT_BUFFER;
-            const playerCardLeft = this.getPlayerCardsStartX(x, width, numActivePlayers);
-            const guideX = scoreSectionRight + ((playerCardLeft - scoreSectionRight - this.getTileOrderGuideWidth()) / 2);
-            this.drawTileOrderGuide(guideX, y + height / 2);
+        let tileOrderGuideBounds: { startX: number; endX: number } | null = null;
+        if (numActivePlayers === 1 || numActivePlayers === 2) {
+            tileOrderGuideBounds = this.drawTileOrderGuideCentered(x + width / 2, y + height / 2);
         }
 
         //current-player interface
         const me = botsById.get(localPlayerId ?? -1)
 
         if (!me) {
-            this.drawPlayerCardsFromObserverPerspective(x, y, width, height, botsById, numActivePlayers, nowMs);
+            this.drawPlayerCardsFromObserverPerspective(x, y, width, height, botsById, numActivePlayers, nowMs, tileOrderGuideBounds);
         }else if (me.getRole() === "observer") {
-            this.drawPlayerCardsFromObserverPerspective(x, y, width, height, botsById, numActivePlayers, nowMs);
+            this.drawPlayerCardsFromObserverPerspective(x, y, width, height, botsById, numActivePlayers, nowMs, tileOrderGuideBounds);
         } else {
             //this.drawPlayerCardsFromPlayerPerspective(me);
             //Currently this is not implemented, but eventually the HUD will look slightly different for players vs observers
-            this.drawPlayerCardsFromObserverPerspective(x, y, width, height, botsById, numActivePlayers, nowMs);
+            this.drawPlayerCardsFromObserverPerspective(x, y, width, height, botsById, numActivePlayers, nowMs, tileOrderGuideBounds);
         }
 
         // Time left
@@ -165,7 +166,7 @@ export default class HUD {
 
         this.ctx.lineWidth = 5;
         this.ctx.strokeStyle = "#000000"
-        const timeX = x + width - 90;
+        const timeX = x + width - TIME_LEFT_X_OFFSET;
         this.ctx.strokeText(`${timeLeft}`, timeX, y + height / 2);
 
         this.ctx.fillStyle = '#ffffff';
@@ -178,16 +179,49 @@ export default class HUD {
         
     }
 
-    private drawPlayerCardsFromObserverPerspective(x: number, y: number, width: number, height: number, botsById: Map<number, Botonoid>, n: number, currentTick: number) {
-        let currentX: number = this.getPlayerCardsStartX(x, width, n)
+    private drawPlayerCardsFromObserverPerspective(
+        x: number,
+        y: number,
+        width: number,
+        height: number,
+        botsById: Map<number, Botonoid>,
+        n: number,
+        currentTick: number,
+        tileOrderGuideBounds: { startX: number; endX: number } | null
+    ) {
         let drawY: number = y + height / 2 - PLAYER_CARD_HEIGHT / 2
 
-        const bots = [...botsById.values()].sort((a, b) => a.getId() - b.getId());
+        const bots = [...botsById.values()]
+            .filter((bot) => bot.getRole() !== "observer")
+            .sort((a, b) => a.getId() - b.getId());
+
+        if (n === 2 && tileOrderGuideBounds && bots.length >= 2) {
+            const scoreSectionRight = x + X_DRAW_OFFSET + SCORE_BAR_X_OFFSET + SCORE_BAR_DRAW_WIDTH + SCORE_TEXT_RIGHT_BUFFER;
+            const timeSectionLeft = x + width - TIME_LEFT_SAFE_WIDTH;
+
+            const leftCenterX = scoreSectionRight + (tileOrderGuideBounds.startX - scoreSectionRight) / 2;
+            const rightCenterX = tileOrderGuideBounds.endX + (timeSectionLeft - tileOrderGuideBounds.endX) / 2;
+
+            const leftCardX = leftCenterX - PLAYER_CARD_WIDTH / 2 - PLAYER_CARD_LEFT_NUDGE;
+            const rightCardX = rightCenterX - PLAYER_CARD_WIDTH / 2 - PLAYER_CARD_LEFT_NUDGE;
+
+            this.drawPlayerInfoCardSmall(leftCardX, drawY, PLAYER_CARD_WIDTH, PLAYER_CARD_HEIGHT, bots[0], currentTick);
+            this.drawPlayerInfoCardSmall(rightCardX, drawY, PLAYER_CARD_WIDTH, PLAYER_CARD_HEIGHT, bots[1], currentTick);
+            return;
+        }
+
+        if (n === 1 && tileOrderGuideBounds && bots.length >= 1) {
+            const timeSectionLeft = x + width - TIME_LEFT_SAFE_WIDTH;
+            const rightCenterX = tileOrderGuideBounds.endX + (timeSectionLeft - tileOrderGuideBounds.endX) / 2;
+            const rightCardX = rightCenterX - PLAYER_CARD_WIDTH / 2 - PLAYER_CARD_LEFT_NUDGE;
+            this.drawPlayerInfoCardSmall(rightCardX, drawY, PLAYER_CARD_WIDTH, PLAYER_CARD_HEIGHT, bots[0], currentTick);
+            return;
+        }
+
+        let currentX: number = this.getPlayerCardsStartX(x, width, n);
         for (const bot of bots) { 
-            if (bot && bot.getRole() != "observer") {
-                this.drawPlayerInfoCardSmall(currentX, drawY, PLAYER_CARD_WIDTH, PLAYER_CARD_HEIGHT, bot, currentTick)
-                currentX += PLAYER_CARD_SPACING + PLAYER_CARD_WIDTH
-            }
+            this.drawPlayerInfoCardSmall(currentX, drawY, PLAYER_CARD_WIDTH, PLAYER_CARD_HEIGHT, bot, currentTick)
+            currentX += PLAYER_CARD_SPACING + PLAYER_CARD_WIDTH
         }
     }   
 
@@ -208,6 +242,13 @@ export default class HUD {
         const arrowWidth = 12;
 
         return (tileCount * tileWidth) + (arrowCount * arrowWidth) + ((tileCount + arrowCount - 1) * elementGap);
+    }
+
+    private drawTileOrderGuideCentered(centerX: number, centerY: number): { startX: number; endX: number } {
+        const guideWidth = this.getTileOrderGuideWidth();
+        const startX = centerX - guideWidth / 2;
+        this.drawTileOrderGuide(startX, centerY);
+        return { startX, endX: startX + guideWidth };
     }
 
     private drawTileOrderGuide(startX: number, centerY: number) {

@@ -61,7 +61,7 @@ function musicUrl(name: string): string {
 }
 
 const audioUrls = {
-  theme: musicUrl("theme"),
+  theme: musicUrl("shooterlandtheme"),
   train: musicUrl("train"),
   puzzlerIntro: musicUrl("puzzlerintro"),
   puzzlerSong: musicUrl("puzzlersong"),

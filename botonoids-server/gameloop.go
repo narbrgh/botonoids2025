@@ -54,6 +54,42 @@ func setPlayerGhostAndResetFoundations(room *rooms.Room, p *rooms.PlayerState) b
 	return true
 }
 
+func pruneDisconnectedPlayersInLobby(room *rooms.Room) bool {
+	if room.Phase != rooms.PhaseLobby {
+		return false
+	}
+
+	removedAny := false
+	hostWasRemoved := false
+	currentHostID := room.HostID
+
+	for id, p := range room.Players {
+		if p != nil && !p.Connected {
+			delete(room.Players, id)
+			delete(room.Clients, id)
+			managedForgetPlayerRoom(id)
+			removedAny = true
+			if strconv.Itoa(id) == currentHostID {
+				hostWasRemoved = true
+			}
+		}
+	}
+
+	if !removedAny {
+		return false
+	}
+
+	if hostWasRemoved {
+		room.HostID = ""
+		for id := range room.Players {
+			room.HostID = strconv.Itoa(id)
+			break
+		}
+	}
+
+	return true
+}
+
 func CheckForWallBuild(room *rooms.Room, p *rooms.PlayerState) bool {
 	wasGardenBuilt := false
 	if p.ActionPressed == true {
@@ -440,6 +476,7 @@ func runGameLoop(
 		// 6) Updaters. (tile, player, etc)
 		prevPhase := room.Phase
 		room.UpdatePhase()
+		prunedDisconnectedInLobby := pruneDisconnectedPlayersInLobby(room)
 		managedSyncStatusFromPhase(room.ID, room.Phase)
 		phaseChanged := room.Phase != prevPhase
 
@@ -449,6 +486,18 @@ func runGameLoop(
 			if b, err := encodeTileMapSnapshotMsg(room); err == nil {
 				broadcast(room, b)
 			}
+		}
+		if prunedDisconnectedInLobby {
+			if b, err := encodePlayerMetaSnapshot(room); err == nil {
+				broadcast(room, b)
+			}
+			if b, err := encodePlayerStatusSnapshot(room); err == nil {
+				broadcast(room, b)
+			}
+			if b, err := encodePlayerSnapshot(room); err == nil {
+				broadcast(room, b)
+			}
+			prevPlayerWireState = map[int]PlayerSnapshotLite{}
 		}
 		sillyPadRemoved, expiredSillyPads, tileChanged, destroyedTiles, Explosions := room.Map.Update(room.Tick)
 

@@ -10,6 +10,7 @@ import type { PlayerSnapshotMsg, PlayerDeltaMsg, PlayerMetaSnapshotMsg, PlayerSt
 import type { Phase , Role , Model } from './protocol';
 import {initLobbyUI, lobbyState } from "./lobby";
 import { initRoomsBrowserUI } from "./roomsBrowser";
+import { initHowToPlay } from "./howToPlay";
 
 import HUD from "./hud";
 
@@ -305,6 +306,11 @@ function getMergedPlayers(): PlayerSnapshotMsg["players"] {
   return mergePlayersWithMeta(base);
 }
 
+const howToPlay = initHowToPlay({
+  onOpenChange: () => {},
+  getControls: () => controlLabels,
+});
+
 const roomsBrowserUI = initRoomsBrowserUI({
   onCreateRoom: (name, maxPlayers) => {
     roomsBrowserUI.setError("");
@@ -320,6 +326,9 @@ const roomsBrowserUI = initRoomsBrowserUI({
   },
   onOpenOptions: () => {
     openOptions();
+  },
+  onHowToPlay: () => {
+    howToPlay.open();
   },
 });
 

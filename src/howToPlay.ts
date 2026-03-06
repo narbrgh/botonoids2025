@@ -283,7 +283,7 @@ const pages: Page[] = [
       demo.px = 4; demo.py = 6;
       demo.mode = "wallBuilding";
       demo.colorChangesLeft = 0;
-      demo.wallsLeft = 4;
+      demo.wallsLeft = 2;
       demo.score = 0;
       resetDemoBase(demo);
     },
@@ -307,6 +307,10 @@ const pages: Page[] = [
         <p><strong>8-9 tiles:</strong> +4 silly pads<br/>
         <strong>10-11 tiles:</strong> +1 wallbreaker<br/>
         <strong>12+ tiles:</strong> +4 silly pads and +2 wallbreakers</p>
+      </div>
+      <div class="htp-section">
+        <h3>Note:</h3>
+        <p>Items are not enabled in this tutorial. Start a one-player "practice" game to try them!
       </div>
     `,
     hint: () => "Walk around freely on this page.",

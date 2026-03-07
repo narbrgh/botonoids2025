@@ -128,7 +128,9 @@ export default class KeyboardController implements Controller {
             this.keyMap.down.includes(key) ||
             this.keyMap.left.includes(key) ||
             this.keyMap.right.includes(key) ||
-            this.keyMap.action.includes(key) 
+            this.keyMap.action.includes(key) ||
+            this.keyMap.changeItem.includes(key) ||
+            this.keyMap.useItem.includes(key)
         );
     }
 

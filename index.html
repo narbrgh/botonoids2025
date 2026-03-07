@@ -21,7 +21,7 @@
         </div>
         <div class="rooms-layout">
           <div class="rooms-main-col">
-            <h2>Rooms</h2>
+            <h2>Play Online</h2>
             <div class="rooms-actions">
               <input id="room-name-input" type="text" placeholder="Room name" />
               <button id="create-room-btn">Create Room</button>
@@ -31,6 +31,7 @@
             <p id="rooms-error" class="rooms-error"></p>
           </div>
           <div class="rooms-side-col">
+            <button id="rooms-play-offline-btn">Play Offline</button>
             <button id="rooms-options-btn">Options</button>
             <button id="rooms-how-to-play-btn" disabled>How to Play</button>
             <button id="rooms-story-btn" disabled>Story</button>
@@ -130,6 +131,20 @@
       </div>
     </div>
 
+    <div id="offline-room" style="display: none;">
+      <div class="offline-room-card">
+        <div class="offline-room-header">
+          <img class="rooms-title-logo" src="/sprites/logo.png" alt="Botonoids" />
+          <h2>Local Play</h2>
+        </div>
+        <div id="offline-room-slots" class="offline-room-slots"></div>
+        <div class="offline-room-footer">
+          <button id="offline-room-back-btn">Back</button>
+          <button id="offline-room-start-btn" disabled>Start Game</button>
+        </div>
+      </div>
+    </div>
+
     <div id="solo-practice-dialog" class="solo-practice-dialog" style="display: none;">
       <div class="solo-practice-card">
         <p>Hello! You are creating a game with only one player. You can do this if you want to practice, or you can cancel if this was an error.</p>
@@ -192,6 +207,7 @@
         </div>
         <div class="options-tabs">
           <button id="options-tab-controls-btn" class="selected">Controls</button>
+          <button id="options-tab-p2controls-btn">Player 2 Controls</button>
           <button id="options-tab-audio-btn">Audio</button>
         </div>
         <div id="options-controls-tab" class="options-tab-panel">
@@ -199,6 +215,13 @@
           <div id="options-controls-list" class="options-controls-list"></div>
           <div class="options-footer-row">
             <button id="options-controls-reset-btn">Reset Controls</button>
+          </div>
+        </div>
+        <div id="options-p2controls-tab" class="options-tab-panel" style="display: none;">
+          <div id="options-p2controls-warning" class="options-warning"></div>
+          <div id="options-p2controls-list" class="options-controls-list"></div>
+          <div class="options-footer-row">
+            <button id="options-p2controls-reset-btn">Reset P2 Controls</button>
           </div>
         </div>
         <div id="options-audio-tab" class="options-tab-panel" style="display: none;">

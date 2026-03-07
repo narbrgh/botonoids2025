@@ -6,6 +6,7 @@ type RoomsBrowserHandlers = {
   onRefreshRooms: () => void;
   onOpenOptions: () => void;
   onHowToPlay: () => void;
+  onPlayOffline: () => void;
 };
 
 export type RoomsBrowserController = {
@@ -22,6 +23,7 @@ export function initRoomsBrowserUI(handlers: RoomsBrowserHandlers): RoomsBrowser
   const refreshRoomsBtn = document.getElementById("refresh-rooms-btn") as HTMLButtonElement | null;
   const optionsBtn = document.getElementById("rooms-options-btn") as HTMLButtonElement | null;
   const howToPlayBtn = document.getElementById("rooms-how-to-play-btn") as HTMLButtonElement | null;
+  const playOfflineBtn = document.getElementById("rooms-play-offline-btn") as HTMLButtonElement | null;
   const roomsErrorEl = document.getElementById("rooms-error");
 
   if (!root || !roomsListEl || !roomNameInput || !createRoomBtn || !refreshRoomsBtn || !optionsBtn || !roomsErrorEl) {
@@ -47,6 +49,12 @@ export function initRoomsBrowserUI(handlers: RoomsBrowserHandlers): RoomsBrowser
     howToPlayBtn.disabled = false;
     howToPlayBtn.addEventListener("click", () => {
       handlers.onHowToPlay();
+    });
+  }
+
+  if (playOfflineBtn) {
+    playOfflineBtn.addEventListener("click", () => {
+      handlers.onPlayOffline();
     });
   }
 

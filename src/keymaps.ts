@@ -17,5 +17,15 @@ export const P2_KEYS: KeyMap = {
     right: ['ArrowRight'],
     action: ['Space', ' '],
     changeItem: ['Shift'],
-    useItem: ['Control','e','E'],
+    useItem: ['Control'],
+};
+
+export const P2_OFFLINE_KEYS: KeyMap = {
+    up: ['w', 'W'],
+    down: ['s', 'S'],
+    left: ['a', 'A'],
+    right: ['d', 'D'],
+    action: ['q', 'Q'],
+    changeItem: ['Tab'],
+    useItem: ['e', 'E'],
 };

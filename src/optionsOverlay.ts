@@ -13,16 +13,20 @@ export type RebindConflict = {
 
 type OptionsOverlayArgs = {
   controls: ControlsState;
+  p2Controls: ControlsState;
   musicChoice: MusicChoice;
   musicVolume: number;
   sfxVolume: number;
   onOpenChange: (open: boolean) => void;
   onApplyRebind: (action: ControlAction, key: string) => void;
   onCancelRebind: () => void;
+  onApplyP2Rebind: (action: ControlAction, key: string) => void;
+  onCancelP2Rebind: () => void;
   onMusicChoiceChange: (choice: MusicChoice) => void;
   onMusicVolumeChange: (value: number) => void;
   onSfxVolumeChange: (value: number) => void;
   onResetControls: () => void;
+  onResetP2Controls: () => void;
 };
 
 export type OptionsOverlayController = {
@@ -30,11 +34,14 @@ export type OptionsOverlayController = {
   close: () => void;
   isOpen: () => boolean;
   setControls: (controls: ControlsState) => void;
+  setP2Controls: (controls: ControlsState) => void;
   setMusicChoice: (choice: MusicChoice) => void;
   setMusicVolume: (value: number) => void;
   setSfxVolume: (value: number) => void;
   setRebindPending: (action: ControlAction | null) => void;
   setRebindConflict: (conflict: RebindConflict | null) => void;
+  setP2RebindPending: (action: ControlAction | null) => void;
+  setP2RebindConflict: (conflict: RebindConflict | null) => void;
 };
 
 const ACTION_LABELS: Record<ControlAction, string> = {
@@ -53,13 +60,18 @@ export function initOptionsOverlay(args: OptionsOverlayArgs): OptionsOverlayCont
   const root = mustGetById<HTMLElement>("options-overlay");
   const dialog = mustGetById<HTMLElement>("options-dialog");
   const closeBtn = mustGetById<HTMLButtonElement>("options-close-btn");
-  const tabControlsBtn = mustGetById<HTMLButtonElement>("options-tab-controls-btn");
-  const tabAudioBtn = mustGetById<HTMLButtonElement>("options-tab-audio-btn");
-  const controlsTab = mustGetById<HTMLElement>("options-controls-tab");
-  const audioTab = mustGetById<HTMLElement>("options-audio-tab");
-  const warningEl = mustGetById<HTMLElement>("options-controls-warning");
-  const controlsListEl = mustGetById<HTMLElement>("options-controls-list");
-  const resetBtn = mustGetById<HTMLButtonElement>("options-controls-reset-btn");
+  const tabControlsBtn  = mustGetById<HTMLButtonElement>("options-tab-controls-btn");
+  const tabP2ControlsBtn = mustGetById<HTMLButtonElement>("options-tab-p2controls-btn");
+  const tabAudioBtn     = mustGetById<HTMLButtonElement>("options-tab-audio-btn");
+  const controlsTab   = mustGetById<HTMLElement>("options-controls-tab");
+  const p2ControlsTab = mustGetById<HTMLElement>("options-p2controls-tab");
+  const audioTab      = mustGetById<HTMLElement>("options-audio-tab");
+  const warningEl       = mustGetById<HTMLElement>("options-controls-warning");
+  const controlsListEl  = mustGetById<HTMLElement>("options-controls-list");
+  const resetBtn        = mustGetById<HTMLButtonElement>("options-controls-reset-btn");
+  const p2WarningEl     = mustGetById<HTMLElement>("options-p2controls-warning");
+  const p2ControlsListEl = mustGetById<HTMLElement>("options-p2controls-list");
+  const p2ResetBtn      = mustGetById<HTMLButtonElement>("options-p2controls-reset-btn");
   const musicChoiceButtonsRoot = mustGetById<HTMLElement>("options-music-choice-buttons");
   const musicVolumeRange = mustGetById<HTMLInputElement>("options-music-volume-range");
   const sfxVolumeRange = mustGetById<HTMLInputElement>("options-sfx-volume-range");
@@ -67,13 +79,18 @@ export function initOptionsOverlay(args: OptionsOverlayArgs): OptionsOverlayCont
   const sfxVolumeValue = mustGetById<HTMLElement>("options-sfx-volume-value");
 
   let isOpen = false;
-  let activeTab: "controls" | "audio" = "controls";
-  let controls = { ...args.controls };
-  let rebindPending: ControlAction | null = null;
-  let rebindConflict: RebindConflict | null = null;
+  let activeTab: "controls" | "p2controls" | "audio" = "controls";
+  let controls   = { ...args.controls };
+  let p2Controls = { ...args.p2Controls };
+  let rebindPending:   ControlAction | null = null;
+  let rebindConflict:  RebindConflict | null = null;
+  let p2RebindPending:  ControlAction | null = null;
+  let p2RebindConflict: RebindConflict | null = null;
 
-  const rowEls = new Map<ControlAction, HTMLElement>();
-  const keyEls = new Map<ControlAction, HTMLElement>();
+  const rowEls   = new Map<ControlAction, HTMLElement>();
+  const keyEls   = new Map<ControlAction, HTMLElement>();
+  const p2RowEls = new Map<ControlAction, HTMLElement>();
+  const p2KeyEls = new Map<ControlAction, HTMLElement>();
   const musicButtons = new Map<MusicChoice, HTMLButtonElement>();
 
   function formatKey(key: string): string {
@@ -82,13 +99,14 @@ export function initOptionsOverlay(args: OptionsOverlayArgs): OptionsOverlayCont
     return key;
   }
 
-  function setTab(tab: "controls" | "audio"): void {
+  function setTab(tab: "controls" | "p2controls" | "audio"): void {
     activeTab = tab;
-    const controlsOn = tab === "controls";
-    controlsTab.style.display = controlsOn ? "block" : "none";
-    audioTab.style.display = controlsOn ? "none" : "block";
-    tabControlsBtn.classList.toggle("selected", controlsOn);
-    tabAudioBtn.classList.toggle("selected", !controlsOn);
+    controlsTab.style.display   = tab === "controls"   ? "block" : "none";
+    p2ControlsTab.style.display = tab === "p2controls" ? "block" : "none";
+    audioTab.style.display      = tab === "audio"      ? "block" : "none";
+    tabControlsBtn.classList.toggle("selected",   tab === "controls");
+    tabP2ControlsBtn.classList.toggle("selected", tab === "p2controls");
+    tabAudioBtn.classList.toggle("selected",      tab === "audio");
   }
 
   function updateWarning(): void {
@@ -109,6 +127,24 @@ export function initOptionsOverlay(args: OptionsOverlayArgs): OptionsOverlayCont
     warningEl.classList.remove("visible");
   }
 
+  function updateP2Warning(): void {
+    if (p2RebindConflict) {
+      p2WarningEl.textContent = `Conflict: "${formatKey(p2RebindConflict.key)}" is assigned to ${ACTION_LABELS[p2RebindConflict.action]} and ${ACTION_LABELS[p2RebindConflict.conflictsWith]}.`;
+      p2WarningEl.style.visibility = "visible";
+      p2WarningEl.classList.add("visible");
+      return;
+    }
+    if (p2RebindPending) {
+      p2WarningEl.textContent = `Press a key for ${ACTION_LABELS[p2RebindPending]}. Press Escape to cancel.`;
+      p2WarningEl.style.visibility = "visible";
+      p2WarningEl.classList.remove("visible");
+      return;
+    }
+    p2WarningEl.textContent = "";
+    p2WarningEl.style.visibility = "hidden";
+    p2WarningEl.classList.remove("visible");
+  }
+
   function renderControlsRows(): void {
     for (const action of ACTIONS) {
       const row = rowEls.get(action);
@@ -124,6 +160,19 @@ export function initOptionsOverlay(args: OptionsOverlayArgs): OptionsOverlayCont
     updateWarning();
   }
 
+  function renderP2ControlsRows(): void {
+    for (const action of ACTIONS) {
+      const row = p2RowEls.get(action);
+      const keyLabel = p2KeyEls.get(action);
+      if (!row || !keyLabel) continue;
+      keyLabel.textContent = formatKey(p2Controls[action]);
+      const inConflict = !!p2RebindConflict && (p2RebindConflict.action === action || p2RebindConflict.conflictsWith === action);
+      row.classList.toggle("conflict", inConflict);
+      row.classList.toggle("pending", p2RebindPending === action);
+    }
+    updateP2Warning();
+  }
+
   function setVolumeLabel(el: HTMLElement, value: number): void {
     const clamped = Math.max(0, Math.min(1, value));
     el.textContent = `${Math.round(clamped * 100)}%`;
@@ -132,9 +181,9 @@ export function initOptionsOverlay(args: OptionsOverlayArgs): OptionsOverlayCont
   function close(): void {
     if (!isOpen) return;
     isOpen = false;
-    rebindPending = null;
-    rebindConflict = null;
-    renderControlsRows();
+    rebindPending = null; rebindConflict = null;
+    p2RebindPending = null; p2RebindConflict = null;
+    renderControlsRows(); renderP2ControlsRows();
     root.style.display = "none";
     args.onOpenChange(false);
   }
@@ -174,6 +223,34 @@ export function initOptionsOverlay(args: OptionsOverlayArgs): OptionsOverlayCont
     keyEls.set(action, keyLabel);
   }
 
+  // Build P2 controls rows
+  for (const action of ACTIONS) {
+    const row = document.createElement("div");
+    row.className = "options-control-row";
+
+    const label = document.createElement("span");
+    label.className = "options-control-label";
+    label.textContent = ACTION_LABELS[action];
+
+    const keyLabel = document.createElement("span");
+    keyLabel.className = "options-control-key";
+
+    const bindBtn = document.createElement("button");
+    bindBtn.textContent = "Rebind";
+    bindBtn.addEventListener("click", () => {
+      p2RebindConflict = null;
+      p2RebindPending = action;
+      renderP2ControlsRows();
+    });
+
+    row.appendChild(label);
+    row.appendChild(keyLabel);
+    row.appendChild(bindBtn);
+    p2ControlsListEl.appendChild(row);
+    p2RowEls.set(action, row);
+    p2KeyEls.set(action, keyLabel);
+  }
+
   closeBtn.addEventListener("click", close);
   root.addEventListener("click", (e) => {
     if (e.target === root) close();
@@ -181,12 +258,19 @@ export function initOptionsOverlay(args: OptionsOverlayArgs): OptionsOverlayCont
   dialog.addEventListener("click", (e) => e.stopPropagation());
 
   tabControlsBtn.addEventListener("click", () => setTab("controls"));
+  tabP2ControlsBtn.addEventListener("click", () => setTab("p2controls"));
   tabAudioBtn.addEventListener("click", () => setTab("audio"));
 
   resetBtn.addEventListener("click", () => {
     rebindPending = null;
     rebindConflict = null;
     args.onResetControls();
+  });
+
+  p2ResetBtn.addEventListener("click", () => {
+    p2RebindPending = null;
+    p2RebindConflict = null;
+    args.onResetP2Controls();
   });
 
   for (const btn of Array.from(musicChoiceButtonsRoot.querySelectorAll<HTMLButtonElement>("button[data-choice]"))) {
@@ -229,6 +313,20 @@ export function initOptionsOverlay(args: OptionsOverlayArgs): OptionsOverlayCont
         return;
       }
 
+      if (p2RebindPending) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.key === "Escape") {
+          p2RebindPending = null;
+          p2RebindConflict = null;
+          args.onCancelP2Rebind();
+          renderP2ControlsRows();
+          return;
+        }
+        args.onApplyP2Rebind(p2RebindPending, e.key);
+        return;
+      }
+
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
@@ -245,6 +343,7 @@ export function initOptionsOverlay(args: OptionsOverlayArgs): OptionsOverlayCont
   sfxVolumeRange.value = String(Math.round(args.sfxVolume * 100));
   setMusicChoiceButtons(args.musicChoice);
   renderControlsRows();
+  renderP2ControlsRows();
   close();
 
   return {
@@ -273,6 +372,18 @@ export function initOptionsOverlay(args: OptionsOverlayArgs): OptionsOverlayCont
     setRebindConflict(conflict) {
       rebindConflict = conflict;
       renderControlsRows();
+    },
+    setP2Controls(nextControls) {
+      p2Controls = { ...nextControls };
+      renderP2ControlsRows();
+    },
+    setP2RebindPending(action) {
+      p2RebindPending = action;
+      renderP2ControlsRows();
+    },
+    setP2RebindConflict(conflict) {
+      p2RebindConflict = conflict;
+      renderP2ControlsRows();
     },
   };
 

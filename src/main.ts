@@ -22,7 +22,7 @@ import { TILE_SIZE, FRAME_SIZE, X_DRAW_OFFSET, Y_DRAW_OFFSET } from './Constants
 import type { DirType } from './protocol';
 
 import KeyboardController, { type KeyMap } from './KeyboardController';
-import { P2_KEYS } from './keymaps';
+import { P2_KEYS, P2_OFFLINE_KEYS } from './keymaps';
 import ServerClock from './ServerClock';
 import {
   initOptionsOverlay,
@@ -30,6 +30,8 @@ import {
   type MusicChoice,
   type RebindConflict,
 } from "./optionsOverlay";
+import { LocalGameServer } from './localServer';
+import { initOfflineRoomUI } from './offlineRoom';
 
 import './style.css'
 import AudioManager from './AudioManager';
@@ -213,13 +215,23 @@ let goOverlayUntilMs = 0;
 let pauseMenuOpen = false;
 let optionsOpen = false;
 let lastDir: DirType | null = null;
+let lastDir2: DirType | null = null;
 let localResultsDismissed = false;
+let isOfflineMode = false;
+let localServer: LocalGameServer | null = null;
+let offlineRoomVisible = false;
+let offlineP2Id: number | null = null;
+let savedOnlinePlayerId: number | null = null;
 
 type BindingAction = keyof KeyMap;
 const BINDING_ACTIONS: BindingAction[] = ["up", "down", "left", "right", "action", "changeItem", "useItem"];
 const DEFAULT_KEYMAP: KeyMap = cloneKeyMap(P2_KEYS);
 const playerKeyMap: KeyMap = cloneKeyMap(DEFAULT_KEYMAP);
 let controlLabels: ControlsState = keyMapToControlsState(playerKeyMap);
+
+const DEFAULT_P2_KEYMAP: KeyMap = cloneKeyMap(P2_OFFLINE_KEYS);
+const p2KeyMap: KeyMap = cloneKeyMap(DEFAULT_P2_KEYMAP);
+let p2ControlLabels: ControlsState = keyMapToControlsState(p2KeyMap);
 
 function cloneKeyMap(map: KeyMap): KeyMap {
   return {
@@ -332,10 +344,14 @@ const roomsBrowserUI = initRoomsBrowserUI({
   onHowToPlay: () => {
     howToPlay.open();
   },
+  onPlayOffline: () => {
+    showOfflineRoom();
+  },
 });
 
 optionsOverlay = initOptionsOverlay({
   controls: controlLabels,
+  p2Controls: p2ControlLabels,
   musicChoice: selectedMusicChoice,
   musicVolume: 1,
   sfxVolume: 1,
@@ -344,8 +360,9 @@ optionsOverlay = initOptionsOverlay({
     if (open) {
       setInGameMenuOpen(false);
       if (joinedRoomId !== null && currentPhase === "phasePlaying") {
-        net.sendCommand({ type: "input", dir: null });
+        sendGameCommand(1, { type: "input", dir: null });
         lastDir = null;
+        if (isOfflineMode) { sendGameCommand(2, { type: "input", dir: null }); lastDir2 = null; }
       }
     } else {
       optionsMusicPreview = null;
@@ -362,13 +379,25 @@ optionsOverlay = initOptionsOverlay({
     optionsOverlay?.setRebindPending(null);
     optionsOverlay?.setRebindConflict(conflict);
     if (joinedRoomId !== null && currentPhase === "phasePlaying") {
-      net.sendCommand({ type: "input", dir: null });
+      sendGameCommand(1, { type: "input", dir: null });
       lastDir = null;
     }
   },
   onCancelRebind: () => {
     optionsOverlay?.setRebindPending(null);
     optionsOverlay?.setRebindConflict(findFirstBindingConflict(controlLabels));
+  },
+  onApplyP2Rebind: (action, key) => {
+    p2ControlLabels = { ...p2ControlLabels, [action]: key };
+    p2KeyMap[action] = variantsForBoundKey(key);
+    const conflict = findFirstBindingConflict(p2ControlLabels);
+    optionsOverlay?.setP2Controls(p2ControlLabels);
+    optionsOverlay?.setP2RebindPending(null);
+    optionsOverlay?.setP2RebindConflict(conflict);
+  },
+  onCancelP2Rebind: () => {
+    optionsOverlay?.setP2RebindPending(null);
+    optionsOverlay?.setP2RebindConflict(findFirstBindingConflict(p2ControlLabels));
   },
   onMusicChoiceChange: (choice) => {
     selectedMusicChoice = choice;
@@ -399,14 +428,104 @@ optionsOverlay = initOptionsOverlay({
     optionsOverlay?.setRebindPending(null);
     optionsOverlay?.setRebindConflict(findFirstBindingConflict(controlLabels));
     if (joinedRoomId !== null && currentPhase === "phasePlaying") {
-      net.sendCommand({ type: "input", dir: null });
+      sendGameCommand(1, { type: "input", dir: null });
       lastDir = null;
     }
+  },
+  onResetP2Controls: () => {
+    const defaults = cloneKeyMap(DEFAULT_P2_KEYMAP);
+    for (const action of BINDING_ACTIONS) {
+      p2KeyMap[action] = [...defaults[action]];
+    }
+    p2ControlLabels = keyMapToControlsState(p2KeyMap);
+    optionsOverlay?.setP2Controls(p2ControlLabels);
+    optionsOverlay?.setP2RebindPending(null);
+    optionsOverlay?.setP2RebindConflict(findFirstBindingConflict(p2ControlLabels));
+  },
+});
+
+// ── Offline mode helpers ──────────────────────────────────────────────────────
+
+function sendGameCommand(playerId: number, cmd: Parameters<typeof net.sendCommand>[0]): void {
+  if (isOfflineMode && localServer) {
+    localServer.sendCommand(playerId, cmd);
+  } else if (playerId === 1) {
+    net.sendCommand(cmd);
+  }
+}
+
+function showOfflineRoom(): void {
+  offlineRoomVisible = true;
+  offlineRoomUI.show();
+}
+
+function startOfflineGame(configs: import('./localServer').OfflinePlayerConfig[]): void {
+  offlineRoomUI.hide();
+  offlineRoomVisible = false;
+  isOfflineMode = true;
+  savedOnlinePlayerId = net.playerId;
+  net.playerId = configs.find(c => c.isHuman)?.id ?? 1;
+  offlineP2Id = configs.filter(c => c.isHuman)[1]?.id ?? null;
+  joinedRoomId = "offline";
+  playerStateById.clear();
+  playerMetaById.clear();
+  playerStatusById.clear();
+  botsById.clear();
+  lastDir = null;
+  lastDir2 = null;
+  localResultsDismissed = false;
+  handlePhaseChange("phaseLobby");
+  applyOverlayState();
+
+  localServer = new LocalGameServer(configs);
+  localServer.start({
+    onConfig:               (m) => net.onConfig?.(m),
+    onHello:                (m) => { net.playerId = m.playerId; },
+    onPlayerSnapshot:       (m) => net.onPlayerSnapshot?.(m),
+    onPlayerDelta:          (m) => net.onPlayerDelta?.(m),
+    onPlayerMetaSnapshot:   (m) => net.onPlayerMetaSnapshot?.(m),
+    onPlayerStatusSnapshot: (m) => net.onPlayerStatusSnapshot?.(m),
+    onTileMapSnapshot:      (m) => net.onTileMapSnapshot?.(m),
+    onTileChange:           (m) => net.onTileChange?.(m),
+    onTileChangeList:       (m) => net.onTileChangeList?.(m),
+    onTileInitiateChange:   (m) => net.onTileInitiateChange?.(m),
+    onSillyPadMsg:          (m) => net.onSillyPadMsg?.(m),
+    onWallbreakerMsg:       (m) => net.onWallbreakerMsg?.(m),
+  });
+}
+
+function stopOfflineGame(): void {
+  localServer?.stop();
+  localServer = null;
+  isOfflineMode = false;
+  offlineRoomVisible = false;
+  offlineP2Id = null;
+  joinedRoomId = null;
+  net.playerId = savedOnlinePlayerId;
+  savedOnlinePlayerId = null;
+  playerStateById.clear();
+  playerMetaById.clear();
+  playerStatusById.clear();
+  botsById.clear();
+  lastDir = null;
+  lastDir2 = null;
+  // Don't null tileMap — the online server won't resend onConfig (WebSocket stays connected),
+  // so applyPlayerWireState would bail early and bots/tiles would never render.
+  // The online server's onTileMapSnapshot will repopulate tile data when the next game starts.
+  handlePhaseChange("phaseLobby");
+  applyOverlayState();
+}
+
+const offlineRoomUI = initOfflineRoomUI({
+  onStart: (configs) => startOfflineGame(configs),
+  onBack: () => {
+    offlineRoomUI.hide();
+    offlineRoomVisible = false;
   },
 });
 
 function applyOverlayState() {
-  roomsBrowserUI.setVisible(!joinedRoomId);
+  roomsBrowserUI.setVisible(!joinedRoomId && !offlineRoomVisible);
   const showLobby = joinedRoomId !== null && (currentPhase === 'phaseLobby' || (currentPhase === "phaseFinished" && localResultsDismissed));
   lobby.style.display = showLobby ? "flex" : "none";
   const showInGameMenu = joinedRoomId !== null && currentPhase === "phasePlaying";
@@ -699,6 +818,10 @@ const p1 = new KeyboardController(playerKeyMap, window, {
   isEnabled: () => joinedRoomId !== null && currentPhase === 'phasePlaying' && !pauseMenuOpen && !optionsOpen,
 });
 
+const p2 = new KeyboardController(p2KeyMap, window, {
+  isEnabled: () => isOfflineMode && joinedRoomId !== null && currentPhase === 'phasePlaying' && !pauseMenuOpen && !optionsOpen,
+});
+
 // ----- MAP of players ----
 
 const botsById = new Map<number, Botonoid>();
@@ -723,7 +846,7 @@ function setInGameMenuOpen(open: boolean) {
   }
   if (open) {
     // Release any held movement on the server while menu is open.
-    net.sendCommand({ type: "input", dir: null });
+    sendGameCommand(net.playerId ?? 1, { type: "input", dir: null });
     lastDir = null;
   }
 }
@@ -748,15 +871,23 @@ if (inGameMenuOptionsBtn) {
 if (inGameMenuQuitBtn) {
   inGameMenuQuitBtn.addEventListener("click", () => {
     setInGameMenuOpen(false);
-    if (joinedRoomId) net.sendCommand({ type: "roomLeave" });
+    if (isOfflineMode) {
+      stopOfflineGame();
+    } else if (joinedRoomId) {
+      net.sendCommand({ type: "roomLeave" });
+    }
   });
 }
 
 if (resultsOkBtn) {
   resultsOkBtn.addEventListener("click", () => {
     if (!joinedRoomId || currentPhase !== "phaseFinished") return;
-    net.sendCommand({ type: "resultsOk" });
-    resultsOkBtn.disabled = true;
+    if (isOfflineMode) {
+      stopOfflineGame();
+    } else {
+      net.sendCommand({ type: "resultsOk" });
+      resultsOkBtn.disabled = true;
+    }
   });
 }
 
@@ -787,7 +918,7 @@ function handlePhaseChange(next: Phase) {
     goOverlayUntilMs = performance.now() + 700;
   }
   if (next === "phaseFinished" && prevPhase !== "phaseFinished") {
-    net.sendCommand({ type: "input", dir: null });
+    sendGameCommand(net.playerId ?? 1, { type: "input", dir: null });
     lastDir = null;
   }
   if (next !== "phaseFinished") {
@@ -1186,11 +1317,20 @@ function update(_dt: number) {
         audio.playSfx("bang", {volume: 1, pitchMin: 1, pitchMax: 1})
         playedCountdownNumber[0] = true
       }
-      for (const cmd of p1.consumeCommands()) net.sendCommand(cmd);
+      const p1Id = net.playerId ?? 1;
+      for (const cmd of p1.consumeCommands()) sendGameCommand(p1Id, cmd);
       const dir = p1.getMoveIntent();          // DirType | null
       if (dir !== lastDir) {
-        net.sendCommand({ type: 'input', dir });
+        sendGameCommand(p1Id, { type: 'input', dir });
         lastDir = dir;
+      }
+      if (isOfflineMode && offlineP2Id !== null) {
+        for (const cmd of p2.consumeCommands()) sendGameCommand(offlineP2Id, cmd);
+        const dir2 = p2.getMoveIntent();
+        if (dir2 !== lastDir2) {
+          sendGameCommand(offlineP2Id, { type: 'input', dir: dir2 });
+          lastDir2 = dir2;
+        }
       }
       //TODO call player update here, if needed. (If we make the player's botonoid start to show actions before the server tells it that it happened)
       if (tileMap) {tileMap.update(nowMs)}
@@ -1279,9 +1419,11 @@ function render() {
 
       // draw HUD
       const hudY = Y_DRAW_OFFSET + tileSize * rows
-      hud.draw({x: 0, y: hudY, width: canvas.width, height: canvas.height - hudY, timeLeft: secondsLeft, botsById, localPlayerId: net.playerId, numActivePlayers, nowMs});
+      hud.draw({x: 0, y: hudY, width: canvas.width, height: canvas.height - hudY, timeLeft: Math.ceil(clock.ticksToSeconds(Math.max(0, currentPhaseEndsAtTick - getEstimatedTick(nowMs)))), botsById, localPlayerId: net.playerId, numActivePlayers, nowMs});
 
-      const sec = Math.max(1, Math.min(3, secondsLeft));
+      const liveTicksLeft = Math.max(0, currentPhaseEndsAtTick - getEstimatedTick(nowMs));
+      const liveSecondsLeft = clock.ticksToSeconds(liveTicksLeft);
+      const sec = Math.max(1, Math.min(3, Math.ceil(liveSecondsLeft)));
       const countdownLabel = String(sec);
 
       drawText(ctx, countdownLabel, canvas.width / 2, canvas.height / 2 - 10, {
@@ -1298,7 +1440,7 @@ function render() {
 
       // draw HUD
       const hudY = Y_DRAW_OFFSET + tileSize * rows
-      hud.draw({x: 0, y: hudY, width: canvas.width, height: canvas.height - hudY, timeLeft: secondsLeft, botsById, localPlayerId: net.playerId, numActivePlayers, nowMs});
+      hud.draw({x: 0, y: hudY, width: canvas.width, height: canvas.height - hudY, timeLeft: Math.ceil(clock.ticksToSeconds(Math.max(0, currentPhaseEndsAtTick - getEstimatedTick(nowMs)))), botsById, localPlayerId: net.playerId, numActivePlayers, nowMs});
 
       if (nowMs < goOverlayUntilMs) {
         drawText(ctx, "Go!", canvas.width / 2, canvas.height / 2 - 10, {
@@ -1313,7 +1455,7 @@ function render() {
     case 'phaseFinished': {
       drawMatchPlayfield(nowMs);
       const hudY = Y_DRAW_OFFSET + tileSize * rows;
-      hud.draw({x: 0, y: hudY, width: canvas.width, height: canvas.height - hudY, timeLeft: secondsLeft, botsById, localPlayerId: net.playerId, numActivePlayers, nowMs});
+      hud.draw({x: 0, y: hudY, width: canvas.width, height: canvas.height - hudY, timeLeft: Math.ceil(clock.ticksToSeconds(Math.max(0, currentPhaseEndsAtTick - getEstimatedTick(nowMs)))), botsById, localPlayerId: net.playerId, numActivePlayers, nowMs});
       renderResultsOverlay(latestLobbyPlayers);
       break;
     }
@@ -1361,28 +1503,29 @@ function drawCountdownSpotlight(nowMs: number): void {
     return;
   }
 
-  const localPlayerId = net.playerId;
-  if (localPlayerId === null) {
-    return;
-  }
+  const humanIds: number[] = [];
+  if (net.playerId !== null) humanIds.push(net.playerId);
+  if (isOfflineMode && offlineP2Id !== null) humanIds.push(offlineP2Id);
+  if (humanIds.length === 0) return;
 
-  const localBot = botsById.get(localPlayerId);
-  if (!localBot || localBot.getRole() === "observer") {
-    return;
-  }
+  const centers = humanIds
+    .map(id => botsById.get(id))
+    .filter(b => b && b.getRole() !== "observer")
+    .map(b => b!.getDrawCenterPx(nowMs));
+  if (centers.length === 0) return;
 
-  const center = localBot.getDrawCenterPx(nowMs);
   const playfieldX = X_DRAW_OFFSET;
   const playfieldY = Y_DRAW_OFFSET;
   const playfieldW = cols * tileSize;
   const playfieldH = rows * tileSize;
 
-  const finalRadius = Math.max(
+  // Compute per-center final radii, then use max as the shared expansion radius.
+  const finalRadius = Math.max(...centers.map(center => Math.max(
     Math.hypot(center.x - playfieldX, center.y - playfieldY),
     Math.hypot(center.x - (playfieldX + playfieldW), center.y - playfieldY),
     Math.hypot(center.x - playfieldX, center.y - (playfieldY + playfieldH)),
     Math.hypot(center.x - (playfieldX + playfieldW), center.y - (playfieldY + playfieldH)),
-  ) + 4;
+  ))) + 4;
 
   const baseRadius = 40;
   const ticksLeft = Math.max(0, currentPhaseEndsAtTick - getEstimatedTick(nowMs));
@@ -1395,19 +1538,20 @@ function drawCountdownSpotlight(nowMs: number): void {
     radius = baseRadius + (finalRadius - baseRadius) * rapid;
   }
 
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(playfieldX, playfieldY, playfieldW, playfieldH);
-  ctx.clip();
-
-  // Fill map rectangle except the spotlight circle.
-  ctx.beginPath();
-  ctx.rect(playfieldX, playfieldY, playfieldW, playfieldH);
-  ctx.moveTo(center.x + radius, center.y);
-  ctx.arc(center.x, center.y, radius, 0, Math.PI * 2, true);
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.38)';
-  ctx.fill('evenodd');
-  ctx.restore();
+  // Use an offscreen canvas so destination-out only punches holes in the overlay
+  // layer, not in the game tiles already drawn on the main canvas.
+  const offscreen = new OffscreenCanvas(playfieldW, playfieldH);
+  const octx = offscreen.getContext('2d')!;
+  octx.fillStyle = 'rgba(0, 0, 0, 0.38)';
+  octx.fillRect(0, 0, playfieldW, playfieldH);
+  octx.globalCompositeOperation = 'destination-out';
+  octx.fillStyle = 'rgba(0, 0, 0, 1)';
+  for (const center of centers) {
+    octx.beginPath();
+    octx.arc(center.x - playfieldX, center.y - playfieldY, radius, 0, Math.PI * 2);
+    octx.fill();
+  }
+  ctx.drawImage(offscreen, playfieldX, playfieldY);
 }
 
 function drawText(

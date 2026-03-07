@@ -821,6 +821,11 @@ button.ready-btn.selected {
   background: #0a0f14;
 }
 
+#htp-item-card-canvas {
+  image-rendering: pixelated;
+  background: transparent;
+}
+
 .htp-nav {
   display: flex;
   align-items: center;

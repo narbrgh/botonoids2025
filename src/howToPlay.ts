@@ -2,16 +2,25 @@ import { resources } from "./Resources";
 import { NUMBER_OF_COLORS } from "./Constants";
 import { frameForBot, BOT_SHEET } from "./botonoidSheet";
 import type { ControlsState } from "./optionsOverlay";
+import { ItemNotifications } from "./itemNotification";
 
 // ─── Tile indices (matching server: tilemap.go) ───
 // 0–4 = color tiles
-// 5 = gold foundation, 6 = gold wall, 7 = gold garden
-// Gold-role tile indices (gold foundation=8, wall=9, garden=10 in sprite sheet)
+// Pink: foundation=5, wall=6, garden=7
+// Gold: foundation=8, wall=9, garden=10
+// Black: foundation=11, wall=12, garden=13
+// White: foundation=14, wall=15, garden=16
+const PINK_WALL = 6;
+const PINK_GARDEN = 7;
 const FOUNDATION = 8;
 const WALL = 9;
 const GARDEN = 10;
 const MIN_COMBO = 6;
 const MAX_COLOR_CHANGES = 5;
+const GHOST_DUR_MS = 40000;
+const WALLBREAKER_DUR_MS = 3000;
+const EXPLOSION_DUR_MS = 600;
+const GOLD_SILLY_PAD_FRAME = 1; // frame 1 in sillyPads.png = goldBot (roleRank order: pink=0, gold=1)
 
 // ─── Timing from constants.go ───
 // TickHz=20, MoveTicks=6 → 300ms, ColorChangeTicks=35 → 1750ms, CooldownTicks=45 → 2250ms
@@ -56,6 +65,27 @@ type DemoState = {
   moveAnim: MoveAnim | null;
   cooldownStartMs: number;
   cooldownDurMs: number;
+  itemCardVisible: boolean;
+  selectedItemIdx: number;
+  itemCounts: [number, number, number];
+  itemSwitchTimer: number;
+  sillyPads: Set<string>;
+  // Pink bot (Items page only)
+  showPinkBot: boolean;
+  pinkPx: number;
+  pinkPy: number;
+  pinkFacing: Dir;
+  pinkCurrentDir: Dir;
+  pinkMoveAnim: MoveAnim | null;
+  pinkGhost: boolean;
+  pinkGhostEndMs: number;
+  pinkNextDirMs: number;
+  // Wallbreakers and explosions
+  demoWallbreakers: { r: number; c: number; placedMs: number; durMs: number }[];
+  demoExplosions: { r: number; c: number; startMs: number; durMs: number }[];
+  // Gold bot ghost state
+  goldGhost: boolean;
+  goldGhostEndMs: number;
 };
 
 // ─── Key display helper ───
@@ -123,6 +153,24 @@ function resetDemoBase(demo: DemoState) {
   demo.moveAnim = null;
   demo.cooldownStartMs = 0;
   demo.cooldownDurMs = 0;
+  demo.itemCardVisible = false;
+  demo.selectedItemIdx = 0;
+  demo.itemCounts = [0, 0, 0];
+  demo.itemSwitchTimer = 0;
+  demo.sillyPads = new Set();
+  demo.showPinkBot = false;
+  demo.pinkPx = 2;
+  demo.pinkPy = 5;
+  demo.pinkFacing = "down";
+  demo.pinkCurrentDir = "down";
+  demo.pinkMoveAnim = null;
+  demo.pinkGhost = false;
+  demo.pinkGhostEndMs = 0;
+  demo.pinkNextDirMs = 0;
+  demo.demoWallbreakers = [];
+  demo.demoExplosions = [];
+  demo.goldGhost = false;
+  demo.goldGhostEndMs = 0;
 }
 
 const pages: Page[] = [
@@ -308,20 +356,34 @@ const pages: Page[] = [
         <strong>10-11 tiles:</strong> +1 wallbreaker<br/>
         <strong>12+ tiles:</strong> +4 silly pads and +2 wallbreakers</p>
       </div>
-      <div class="htp-section">
-        <h3>Note:</h3>
-        <p>Items are not enabled in this tutorial. Start a one-player "practice" game to try them!
-      </div>
     `,
-    hint: () => "Walk around freely on this page.",
+    hint: (c) => `${keyDisplayName(c.changeItem)} to switch item · ${keyDisplayName(c.useItem)} to use it`,
     setup(demo) {
       demo.tiles = makeRandomTiles();
-      demo.px = 4; demo.py = 4;
+      // Pink 2x2 garden enclosed by pink walls (upper-right corner)
+      // Ring of pink walls around rows 2-3, cols 7-8
+      for (let c = 6; c <= 9; c++) demo.tiles[1][c] = PINK_WALL; // top
+      for (let c = 6; c <= 9; c++) demo.tiles[4][c] = PINK_WALL; // bottom
+      demo.tiles[2][6] = PINK_WALL; demo.tiles[3][6] = PINK_WALL; // left
+      demo.tiles[2][9] = PINK_WALL; demo.tiles[3][9] = PINK_WALL; // right
+      demo.tiles[2][7] = PINK_GARDEN; demo.tiles[2][8] = PINK_GARDEN;
+      demo.tiles[3][7] = PINK_GARDEN; demo.tiles[3][8] = PINK_GARDEN;
+
+      demo.px = 4; demo.py = 6;
       demo.mode = "walking";
       demo.colorChangesLeft = 0;
       demo.wallsLeft = 0;
       demo.score = 0;
       resetDemoBase(demo);
+      demo.itemCardVisible = true;
+      demo.selectedItemIdx = 0;
+      demo.itemCounts = [50, 2, 1];
+      // Pink bot wanders in the left/center area
+      demo.showPinkBot = true;
+      demo.pinkPx = 2;
+      demo.pinkPy = 7;
+      demo.pinkFacing = "right";
+      demo.pinkCurrentDir = "right";
     },
   },
 
@@ -381,7 +443,7 @@ function floodFill(tiles: number[][], startR: number, startC: number, targetColo
 
 function checkGardenFromWall(tiles: number[][], wallR: number, wallC: number): [number, number][] {
   const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-  let bestGarden: [number, number][] = [];
+  const allGardenTiles = new Map<string, [number, number]>();
 
   for (const [dr, dc] of dirs) {
     const sr = wallR + dr;
@@ -394,6 +456,7 @@ function checkGardenFromWall(tiles: number[][], wallR: number, wallC: number): [
     const gardenable: [number, number][] = [];
     const stack: [number, number][] = [[sr, sc]];
     const edgeHits = new Set<string>();
+    let hitEnemyWall = false;
 
     while (stack.length > 0) {
       const [r, c] = stack.pop()!;
@@ -408,19 +471,23 @@ function checkGardenFromWall(tiles: number[][], wallR: number, wallC: number): [
       }
       const tileIdx = tiles[r][c];
       if (tileIdx === WALL || tileIdx === GARDEN) continue;
-      if (tileIdx > NUMBER_OF_COLORS - 1 && tileIdx !== FOUNDATION) continue;
+      if (tileIdx > NUMBER_OF_COLORS - 1 && tileIdx !== FOUNDATION) {
+        // Enemy walls invalidate the region (can't garden against opponent walls)
+        if (tileIdx === PINK_WALL || tileIdx === 12 || tileIdx === 15) hitEnemyWall = true;
+        continue;
+      }
       visited.add(key);
       gardenable.push([r, c]);
       stack.push([r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]);
     }
 
-    if (edgeHits.size <= 2 && gardenable.length > 0) {
-      if (gardenable.length > bestGarden.length) {
-        bestGarden = gardenable;
+    if (!hitEnemyWall && edgeHits.size <= 2 && gardenable.length > 0) {
+      for (const [r, c] of gardenable) {
+        allGardenTiles.set(`${r},${c}`, [r, c]);
       }
     }
   }
-  return bestGarden;
+  return [...allGardenTiles.values()];
 }
 
 function countFoundation(tiles: number[][]): number {
@@ -493,6 +560,7 @@ export function initHowToPlay(args: {
 
   const ctx = demoCanvas.getContext("2d")!;
   ctx.imageSmoothingEnabled = false;
+  const itemNotifs = new ItemNotifications();
 
   let isOpenState = false;
   let animFrame = 0;
@@ -511,6 +579,24 @@ export function initHowToPlay(args: {
     moveAnim: null,
     cooldownStartMs: 0,
     cooldownDurMs: 0,
+    itemCardVisible: false,
+    selectedItemIdx: 0,
+    itemCounts: [0, 0, 0],
+    itemSwitchTimer: 0,
+    sillyPads: new Set(),
+    showPinkBot: false,
+    pinkPx: 2,
+    pinkPy: 5,
+    pinkFacing: "down",
+    pinkCurrentDir: "down",
+    pinkMoveAnim: null,
+    pinkGhost: false,
+    pinkGhostEndMs: 0,
+    pinkNextDirMs: 0,
+    demoWallbreakers: [],
+    demoExplosions: [],
+    goldGhost: false,
+    goldGhostEndMs: 0,
   };
 
   // ─── Key mapping helpers ───
@@ -542,14 +628,34 @@ export function initHowToPlay(args: {
     return null;
   }
 
+  function isChangeItemEvent(e: KeyboardEvent): boolean {
+    const c = args.getControls();
+    return normalizeKey(e.key) === normalizeKey(c.changeItem);
+  }
+
+  function isUseItemEvent(e: KeyboardEvent): boolean {
+    const c = args.getControls();
+    return normalizeKey(e.key) === normalizeKey(c.useItem);
+  }
+
   function isBoundEvent(e: KeyboardEvent): boolean {
-    return isDirEvent(e) !== null || isActionEvent(e);
+    return isDirEvent(e) !== null || isActionEvent(e) || isChangeItemEvent(e) || isUseItemEvent(e);
   }
 
   // String-based versions for checking keysPressed/keysDown sets in the game loop
   function isActionKey(key: string): boolean {
     const c = args.getControls();
     return normalizeKey(key) === normalizeKey(c.action);
+  }
+
+  function isChangeItemKey(key: string): boolean {
+    const c = args.getControls();
+    return normalizeKey(key) === normalizeKey(c.changeItem);
+  }
+
+  function isUseItemKey(key: string): boolean {
+    const c = args.getControls();
+    return normalizeKey(key) === normalizeKey(c.useItem);
   }
 
   // ─── Keyboard (capture phase to beat button focus) ───
@@ -646,6 +752,29 @@ export function initHowToPlay(args: {
         }
         demo.mode = "wallBuilding";
         demo.wallsLeft = group.length - 3;
+        // Item rewards based on combo size
+        const sz = group.length;
+        if (sz >= 8) {
+          // Calculate combo center for notification position
+          let sumR = 0, sumC = 0;
+          for (const [gr, gc] of group) { sumR += gr; sumC += gc; }
+          const cx = (sumC / group.length + 0.5) * TILE_PX;
+          const cy = (sumR / group.length + 0.5) * TILE_PX;
+
+          if (sz >= 12) {
+            demo.itemCounts[0] += 4;
+            demo.itemCounts[1] += 2;
+            itemNotifs.add(cx - 10, cy, nowMs, 0, "+4");
+            itemNotifs.add(cx + 10, cy + 14, nowMs, 1, "+2");
+          } else if (sz >= 10) {
+            demo.itemCounts[1] += 1;
+            itemNotifs.add(cx, cy, nowMs, 1, "+1");
+          } else {
+            demo.itemCounts[0] += 4;
+            itemNotifs.add(cx, cy, nowMs, 0, "+4");
+          }
+          demo.itemCardVisible = true;
+        }
         // Do NOT clear colorChangesLeft here
       }
 
@@ -675,6 +804,7 @@ export function initHowToPlay(args: {
     const nx = demo.px + dx;
     const ny = demo.py + dy;
     if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) return;
+    if (!demo.goldGhost && isGoldBlockedByWall(demo.tiles[ny][nx])) return;
 
     // Start time accounts for overshoot so chained moves feel seamless
     const startMs = nowMs - moveOvershootMs;
@@ -723,6 +853,40 @@ export function initHowToPlay(args: {
     if (demo.mode !== "cooldown") return;
     if (nowMs - demo.cooldownStartMs >= demo.cooldownDurMs) {
       demo.mode = "walking";
+    }
+  }
+
+  const BLAST_RADIUS = 2;
+
+  function handleUseItem(nowMs: number) {
+    if (!demo.itemCardVisible) return;
+    const sel = demo.selectedItemIdx;
+
+    if (sel === 0 && demo.itemCounts[0] > 0) {
+      // Silly pad: place on current tile (if not already one there)
+      const key = `${demo.py},${demo.px}`;
+      if (!demo.sillyPads.has(key)) {
+        demo.sillyPads.add(key);
+        demo.itemCounts[0]--;
+      }
+    } else if (sel === 1 && demo.itemCounts[1] > 0) {
+      // Wallbreaker: place a timed bomb one tile in front of the player
+      const fdx = demo.facing === "left" ? -1 : demo.facing === "right" ? 1 : 0;
+      const fdy = demo.facing === "up" ? -1 : demo.facing === "down" ? 1 : 0;
+      const tr = demo.py + fdy;
+      const tc = demo.px + fdx;
+      if (tr >= 0 && tr < ROWS && tc >= 0 && tc < COLS) {
+        const alreadyHere = demo.demoWallbreakers.some(wb => wb.r === tr && wb.c === tc);
+        if (!alreadyHere) {
+          demo.demoWallbreakers.push({ r: tr, c: tc, placedMs: nowMs, durMs: WALLBREAKER_DUR_MS });
+          demo.itemCounts[1]--;
+        }
+      }
+    } else if (sel === 2 && demo.itemCounts[2] > 0 && !demo.goldGhost) {
+      // Ghost: activate gold bot ghost mode for 40 seconds
+      demo.goldGhost = true;
+      demo.goldGhostEndMs = nowMs + GHOST_DUR_MS;
+      demo.itemCounts[2]--;
     }
   }
 
@@ -814,9 +978,30 @@ export function initHowToPlay(args: {
       }
     }
 
+    // Draw silly pads (gold color = frame GOLD_SILLY_PAD_FRAME in sillyPads sprite)
+    const sillyPadsImg = resources.images.sillyPads;
+    for (const key of demo.sillyPads) {
+      const [pr, pc] = key.split(",").map(Number);
+      const sx = pc * TILE_PX;
+      const sy = pr * TILE_PX;
+      if (sillyPadsImg.isLoaded) {
+        ctx.drawImage(sillyPadsImg.image, 0, GOLD_SILLY_PAD_FRAME * 32, 32, 32, sx, sy, TILE_PX, TILE_PX);
+      } else {
+        ctx.fillStyle = "rgba(255,207,0,0.7)";
+        ctx.fillRect(sx + 4, sy + 4, TILE_PX - 8, TILE_PX - 8);
+      }
+    }
+
+    // Draw wallbreakers and pink bot (interleaved per row for correct z-order)
+    drawDemoWallbreakers(nowMs);
+    drawPinkBot(nowMs);
+
     // Draw player bot with smooth slide
     const frame = frameForBot("goldBot", "alphanoid", demo.facing);
     const pos = getDrawPos(nowMs);
+
+    ctx.save();
+    if (demo.goldGhost) ctx.globalAlpha = 0.45;
 
     if (botsImg.isLoaded) {
       const col = frame % BOT_SHEET.cols;
@@ -827,9 +1012,10 @@ export function initHowToPlay(args: {
         pos.x, pos.y, TILE_PX, TILE_PX
       );
     } else {
-      ctx.fillStyle = "#f5c542";
+      ctx.fillStyle = demo.goldGhost ? "rgba(245,197,66,0.4)" : "#f5c542";
       ctx.fillRect(pos.x + 4, pos.y + 4, TILE_PX - 8, TILE_PX - 8);
     }
+    ctx.restore();
 
     // Color changes left above head (show during colorChanging and wallBuilding)
     if (demo.colorChangesLeft > 0 && (demo.mode === "colorChanging" || demo.mode === "wallBuilding")) {
@@ -873,6 +1059,13 @@ export function initHowToPlay(args: {
       ctx.restore();
     }
 
+    // Explosions (on top of everything)
+    drawDemoExplosions(nowMs);
+
+    // Floating item notifications
+    const itemsImgForNotif = resources.images.items;
+    itemNotifs.draw(ctx, nowMs, itemsImgForNotif.isLoaded ? itemsImgForNotif.image : null);
+
     // Score
     ctx.save();
     ctx.font = '700 14px "Goldman"';
@@ -884,6 +1077,7 @@ export function initHowToPlay(args: {
     ctx.fillStyle = "#f5c542";
     ctx.fillText(`Score: ${demo.score}`, demoCanvas.width - 4, 4);
     ctx.restore();
+
 
     // Mode indicator
     if (demo.mode !== "walking") {
@@ -908,6 +1102,351 @@ export function initHowToPlay(args: {
       ctx.fillStyle = modeColors[demo.mode] ?? "#fff";
       ctx.fillText(modeLabel, 4, 4);
       ctx.restore();
+    }
+  }
+
+  // ─── Helpers ───
+
+  function isWallTile(idx: number): boolean {
+    return idx === 6 || idx === 9 || idx === 12 || idx === 15;
+  }
+
+  // Gold bot passes through gold walls (9), blocked by pink/black/white
+  function isGoldBlockedByWall(idx: number): boolean {
+    return idx === PINK_WALL || idx === 12 || idx === 15;
+  }
+
+  // Pink bot passes through pink walls (6), blocked by gold/black/white
+  function isPinkBlockedByWall(idx: number): boolean {
+    return idx === WALL || idx === 12 || idx === 15;
+  }
+
+  // ─── Pink bot AI ───
+
+  function updatePinkMoveAnim(nowMs: number) {
+    if (!demo.pinkMoveAnim) return;
+    const elapsed = nowMs - demo.pinkMoveAnim.startMs;
+    if (elapsed >= demo.pinkMoveAnim.durMs) {
+      demo.pinkMoveAnim = null;
+    }
+  }
+
+  function updatePinkGhost(nowMs: number) {
+    if (demo.pinkGhost && nowMs >= demo.pinkGhostEndMs) {
+      demo.pinkGhost = false;
+    }
+  }
+
+  function updateGoldGhost(nowMs: number) {
+    if (demo.goldGhost && nowMs >= demo.goldGhostEndMs) {
+      demo.goldGhost = false;
+    }
+  }
+
+  function tryMovePink(nowMs: number) {
+    if (!demo.showPinkBot) return;
+    if (demo.pinkMoveAnim) return;
+
+    // Occasionally pick a new random direction
+    if (nowMs >= demo.pinkNextDirMs) {
+      const dirs: Dir[] = ["up", "down", "left", "right"];
+      demo.pinkCurrentDir = dirs[Math.floor(Math.random() * 4)];
+      demo.pinkNextDirMs = nowMs + 800 + Math.random() * 1200;
+    }
+
+    const dir = demo.pinkCurrentDir;
+    const dx = dir === "left" ? -1 : dir === "right" ? 1 : 0;
+    const dy = dir === "up" ? -1 : dir === "down" ? 1 : 0;
+    const nx = demo.pinkPx + dx;
+    const ny = demo.pinkPy + dy;
+
+    if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) {
+      demo.pinkNextDirMs = nowMs; // retry immediately with new dir
+      return;
+    }
+    // Pink bot is blocked by non-pink wall tiles unless ghosting
+    if (!demo.pinkGhost && isPinkBlockedByWall(demo.tiles[ny][nx])) {
+      demo.pinkNextDirMs = nowMs;
+      return;
+    }
+    // Pink bot is blocked by gold silly pads (unless ghosted)
+    if (!demo.pinkGhost && demo.sillyPads.has(`${ny},${nx}`)) {
+      demo.pinkNextDirMs = nowMs;
+      return;
+    }
+
+    demo.pinkFacing = dir;
+    demo.pinkMoveAnim = {
+      fromX: demo.pinkPx,
+      fromY: demo.pinkPy,
+      toX: nx,
+      toY: ny,
+      startMs: nowMs,
+      durMs: MOVE_DURATION_MS,
+    };
+    demo.pinkPx = nx;
+    demo.pinkPy = ny;
+  }
+
+  function getPinkDrawPos(nowMs: number): { x: number; y: number } {
+    if (!demo.pinkMoveAnim) {
+      return { x: demo.pinkPx * TILE_PX, y: demo.pinkPy * TILE_PX };
+    }
+    const elapsed = nowMs - demo.pinkMoveAnim.startMs;
+    const t = Math.min(1, elapsed / demo.pinkMoveAnim.durMs);
+    return {
+      x: (demo.pinkMoveAnim.fromX + (demo.pinkMoveAnim.toX - demo.pinkMoveAnim.fromX) * t) * TILE_PX,
+      y: (demo.pinkMoveAnim.fromY + (demo.pinkMoveAnim.toY - demo.pinkMoveAnim.fromY) * t) * TILE_PX,
+    };
+  }
+
+  function drawPinkBot(nowMs: number) {
+    if (!demo.showPinkBot) return;
+    const botsImg = resources.images.bots;
+    const pos = getPinkDrawPos(nowMs);
+    const frame = frameForBot("pinkBot", "alphanoid", demo.pinkFacing);
+
+    ctx.save();
+    if (demo.pinkGhost) ctx.globalAlpha = 0.45;
+
+    if (botsImg.isLoaded) {
+      const col = frame % BOT_SHEET.cols;
+      const row = Math.floor(frame / BOT_SHEET.cols);
+      ctx.drawImage(botsImg.image, col * 32, row * 32, 32, 32, pos.x, pos.y, TILE_PX, TILE_PX);
+    } else {
+      ctx.fillStyle = demo.pinkGhost ? "rgba(255,56,152,0.4)" : "rgb(255,56,152)";
+      ctx.fillRect(pos.x + 4, pos.y + 4, TILE_PX - 8, TILE_PX - 8);
+    }
+    ctx.restore();
+  }
+
+  // ─── Wallbreakers & explosions ───
+
+  function isGardenTile(idx: number): boolean {
+    return idx === 7 || idx === 10 || idx === 13 || idx === 16;
+  }
+
+  function floodFillGarden(startR: number, startC: number): [number, number][] {
+    const visited = new Set<string>();
+    const result: [number, number][] = [];
+    const stack: [number, number][] = [[startR, startC]];
+    while (stack.length > 0) {
+      const [r, c] = stack.pop()!;
+      const key = `${r},${c}`;
+      if (visited.has(key)) continue;
+      if (r < 0 || r >= ROWS || c < 0 || c >= COLS) continue;
+      if (!isGardenTile(demo.tiles[r][c])) continue;
+      visited.add(key);
+      result.push([r, c]);
+      stack.push([r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]);
+    }
+    return result;
+  }
+
+  function triggerExplosion(r: number, c: number, nowMs: number) {
+    // Destroy only the tile directly under the wallbreaker
+    const idx = demo.tiles[r][c];
+    if (isWallTile(idx) || isGardenTile(idx)) {
+      demo.tiles[r][c] = Math.floor(Math.random() * NUMBER_OF_COLORS);
+
+      // If a wall was destroyed, also flood-fill and destroy any adjacent connected gardens
+      if (isWallTile(idx)) {
+        const adjDirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        const destroyedGardens = new Set<string>();
+        for (const [dr, dc] of adjDirs) {
+          const gr = r + dr;
+          const gc = c + dc;
+          if (gr < 0 || gr >= ROWS || gc < 0 || gc >= COLS) continue;
+          if (!isGardenTile(demo.tiles[gr][gc])) continue;
+          const key = `${gr},${gc}`;
+          if (destroyedGardens.has(key)) continue;
+          for (const [fr, fc] of floodFillGarden(gr, gc)) {
+            destroyedGardens.add(`${fr},${fc}`);
+            demo.tiles[fr][fc] = Math.floor(Math.random() * NUMBER_OF_COLORS);
+          }
+        }
+      }
+    }
+
+    // Add explosion animation
+    demo.demoExplosions.push({ r, c, startMs: nowMs, durMs: EXPLOSION_DUR_MS });
+
+    // Blast radius: any bot within 2 tiles becomes a ghost (40 seconds)
+    if (demo.showPinkBot) {
+      const dist = Math.abs(demo.pinkPy - r) + Math.abs(demo.pinkPx - c);
+      if (dist <= BLAST_RADIUS) {
+        demo.pinkGhost = true;
+        demo.pinkGhostEndMs = nowMs + GHOST_DUR_MS;
+      }
+    }
+    // Also ghost the gold bot if within blast radius
+    const goldDist = Math.abs(demo.py - r) + Math.abs(demo.px - c);
+    if (goldDist <= BLAST_RADIUS) {
+      demo.goldGhost = true;
+      demo.goldGhostEndMs = nowMs + GHOST_DUR_MS;
+    }
+  }
+
+  function updateWallbreakers(nowMs: number) {
+    const remaining: typeof demo.demoWallbreakers = [];
+    for (const wb of demo.demoWallbreakers) {
+      if (nowMs >= wb.placedMs + wb.durMs) {
+        triggerExplosion(wb.r, wb.c, nowMs);
+      } else {
+        remaining.push(wb);
+      }
+    }
+    demo.demoWallbreakers = remaining;
+    demo.demoExplosions = demo.demoExplosions.filter(e => nowMs - e.startMs < e.durMs);
+  }
+
+  function drawDemoWallbreakers(nowMs: number) {
+    const itemsImg = resources.images.items;
+    for (const wb of demo.demoWallbreakers) {
+      const x = wb.c * TILE_PX;
+      const y = wb.r * TILE_PX;
+      const elapsed = nowMs - wb.placedMs;
+      const t = Math.max(0, Math.min(1, elapsed / wb.durMs));
+      const remaining = wb.durMs - elapsed;
+
+      if (itemsImg.isLoaded) {
+        ctx.drawImage(itemsImg.image, 0, 3 * 32, 32, 32, x, y, TILE_PX, TILE_PX);
+      }
+
+      if (remaining > 100) {
+        const f0 = 1.5, f1 = 18.0;
+        const phase = 2 * Math.PI * (f0 * t + 0.5 * (f1 - f0) * t * t);
+        const pulse = 0.5 + 0.5 * Math.sin(phase);
+        const redness = (0.2 + 0.8 * pulse) * 0.6;
+        ctx.fillStyle = `rgba(255,0,0,${redness.toFixed(3)})`;
+        ctx.fillRect(x, y, TILE_PX, TILE_PX);
+      } else {
+        const p = remaining / 100;
+        const flash = (1 - p) * (1 - p);
+        ctx.fillStyle = `rgba(255,255,0,${flash.toFixed(3)})`;
+        ctx.fillRect(x, y, TILE_PX, TILE_PX);
+      }
+    }
+  }
+
+  function drawDemoExplosions(nowMs: number) {
+    for (const e of demo.demoExplosions) {
+      const t = Math.min(1, (nowMs - e.startMs) / e.durMs);
+      if (t <= 0 || t >= 1) continue;
+      const cx = e.c * TILE_PX + TILE_PX / 2;
+      const cy = e.r * TILE_PX + TILE_PX / 2;
+      const fade = 1 - t;
+      const maxRadius = TILE_PX * 2.2;
+      const radius = maxRadius * (0.2 + 0.8 * t);
+
+      ctx.save();
+      const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+      gradient.addColorStop(0.0, `rgba(255,255,200,${(0.85 * fade).toFixed(3)})`);
+      gradient.addColorStop(0.4, `rgba(255,150,50,${(0.65 * fade).toFixed(3)})`);
+      gradient.addColorStop(1.0, "rgba(255,0,0,0)");
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = `rgba(255,230,130,${(0.9 * fade).toFixed(3)})`;
+      ctx.lineWidth = Math.max(1, TILE_PX * 0.08 * fade);
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius * 0.9, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = `rgba(255,235,160,${(0.75 * fade).toFixed(3)})`;
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2 + t * 2.2;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(a) * radius * 0.25, cy + Math.sin(a) * radius * 0.25);
+        ctx.lineTo(cx + Math.cos(a) * radius * 0.75, cy + Math.sin(a) * radius * 0.75);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  function drawItemCard(nowMs: number) {
+    const cardCanvas = document.getElementById("htp-item-card-canvas") as HTMLCanvasElement | null;
+    if (!cardCanvas) return;
+
+    if (!demo.itemCardVisible) {
+      cardCanvas.style.display = "none";
+      return;
+    }
+    cardCanvas.style.display = "block";
+
+    const cardCtx = cardCanvas.getContext("2d")!;
+    cardCtx.imageSmoothingEnabled = false;
+    cardCtx.clearRect(0, 0, cardCanvas.width, cardCanvas.height);
+
+    const cardW = 120;
+    const cardH = 44;
+    const cardX = (cardCanvas.width - cardW) / 2;
+    const cardY = (cardCanvas.height - cardH) / 2;
+
+    const itemsImg = resources.images.items;
+    const spriteW = 32;
+    const spriteH = 32;
+    const occupiedWidth = spriteW * 3;
+    const unoccupiedWidth = cardW - occupiedWidth;
+    const whiteSpace = unoccupiedWidth / 4;
+
+    // Card border (gold)
+    cardCtx.strokeStyle = "rgb(255,207,0)";
+    cardCtx.lineWidth = 4;
+    cardCtx.strokeRect(cardX, cardY, cardW, cardH);
+
+    const basePositions = [
+      { x: cardX + whiteSpace,               y: cardY + cardH / 2 - spriteH / 2 },
+      { x: cardX + cardW / 2 - spriteW / 2,  y: cardY + cardH / 2 - spriteH / 2 },
+      { x: cardX + cardW - spriteW - whiteSpace, y: cardY + cardH / 2 - spriteH / 2 },
+    ];
+
+    for (let i = 0; i < 3; i++) {
+      let { x, y } = basePositions[i];
+      const isSelected = i === demo.selectedItemIdx;
+
+      if (isSelected) {
+        cardCtx.fillStyle = "rgb(255,207,0)";
+        cardCtx.fillRect(x, y, spriteW, spriteH);
+        cardCtx.strokeStyle = "rgb(176,145,0)";
+        cardCtx.lineWidth = 2;
+        cardCtx.strokeRect(x, y, spriteW, spriteH);
+        y -= 3;
+      }
+
+      if (itemsImg.isLoaded) {
+        cardCtx.drawImage(itemsImg.image, 0, i * 32, 32, 32, x, y, spriteW, spriteH);
+      } else {
+        cardCtx.fillStyle = ["#4af", "#f84", "#8f8"][i];
+        cardCtx.fillRect(x + 4, y + 4, spriteW - 8, spriteH - 8);
+      }
+
+      // Item count (ghost item: no number normally, countdown when active)
+      let countText: string | null = null;
+      if (i === 2) {
+        // Ghost: show countdown when ghosted, nothing otherwise
+        if (demo.goldGhost) {
+          countText = String(Math.ceil(Math.max(0, demo.goldGhostEndMs - nowMs) / 1000));
+        }
+      } else {
+        countText = String(demo.itemCounts[i]);
+      }
+      if (countText !== null) {
+        cardCtx.save();
+        cardCtx.font = '400 21px "Goldman"';
+        cardCtx.textBaseline = "middle";
+        cardCtx.textAlign = "left";
+        cardCtx.lineWidth = 3;
+        cardCtx.strokeStyle = "#000";
+        cardCtx.fillStyle = "#fff";
+        cardCtx.strokeText(countText, x + 5, y + spriteH / 2 + 4);
+        cardCtx.fillText(countText, x + 5, y + spriteH / 2 + 4);
+        cardCtx.restore();
+      }
     }
   }
 
@@ -995,6 +1534,7 @@ export function initHowToPlay(args: {
     dirStack = [];
     actionDown = false;
     moveOvershootMs = 0;
+    itemNotifs.clear();
 
     setTimeout(() => {
       drawTileOrder();
@@ -1017,11 +1557,14 @@ export function initHowToPlay(args: {
   function tick(nowMs: number) {
     if (!isOpenState) return;
 
-    // Edge-triggered action (for entering colorChanging mode, or building a wall on press)
+    // Edge-triggered keys
     for (const key of keysPressed) {
       if (isActionKey(key)) {
         handleAction(nowMs);
-        break;
+      } else if (isChangeItemKey(key) && demo.itemCardVisible) {
+        demo.selectedItemIdx = (demo.selectedItemIdx + 1) % 3;
+      } else if (isUseItemKey(key)) {
+        handleUseItem(nowMs);
       }
     }
     keysPressed.clear();
@@ -1029,7 +1572,13 @@ export function initHowToPlay(args: {
     updateCooldown(nowMs);
     updateMoveAnim(nowMs);
     tryMove(nowMs);
+    updatePinkMoveAnim(nowMs);
+    updatePinkGhost(nowMs);
+    updateGoldGhost(nowMs);
+    tryMovePink(nowMs);
+    updateWallbreakers(nowMs);
     drawDemo(nowMs);
+    drawItemCard(nowMs);
     animFrame = requestAnimationFrame(tick);
   }
 
@@ -1048,6 +1597,8 @@ export function initHowToPlay(args: {
     if (!isOpenState) return;
     isOpenState = false;
     root.style.display = "none";
+    const cardCanvas = document.getElementById("htp-item-card-canvas") as HTMLCanvasElement | null;
+    if (cardCanvas) cardCanvas.style.display = "none";
     keysDown.clear();
     keysPressed.clear();
     dirStack = [];

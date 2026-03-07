@@ -13,6 +13,7 @@ import { initRoomsBrowserUI } from "./roomsBrowser";
 import { initHowToPlay } from "./howToPlay";
 
 import HUD from "./hud";
+import { ItemNotifications } from "./itemNotification";
 
 import {frameForBot, BOT_SHEET} from './botonoidSheet'
 
@@ -173,6 +174,7 @@ window.addEventListener("keydown", unlockAudioOnce, { once: true });
 
 //Set up HUD
 let hud = new HUD(ctx);
+const itemNotifs = new ItemNotifications();
 
 
 //Set up small canvas element that draws the botonoid preview in the lobby screen
@@ -779,6 +781,7 @@ function handlePhaseChange(next: Phase) {
   if (prevPhase === 'phaseLobby' && next === 'phaseCountdown') {
     //reset the bools for the countdown sound effects
     playedCountdownNumber[0] = playedCountdownNumber[1] = playedCountdownNumber[2] = playedCountdownNumber[3] = false
+    itemNotifs.clear();
   }
   if (prevPhase === "phaseCountdown" && next === "phasePlaying") {
     goOverlayUntilMs = performance.now() + 700;
@@ -964,8 +967,24 @@ net.onPlayerSnapshot = (s: PlayerSnapshotMsg) => {
 };
 
 net.onPlayerDelta = (m: PlayerDeltaMsg) => {
+  const nowMs = performance.now();
   for (const d of m.deltas) {
     const prev = playerStateById.get(d.id);
+
+    // Detect item count increases for floating notifications
+    if (prev) {
+      const sillyDelta = (d.numSillyPadsLeft ?? prev.numSillyPadsLeft) - prev.numSillyPadsLeft;
+      const wbDelta = (d.numWallbreakersLeft ?? prev.numWallbreakersLeft) - prev.numWallbreakersLeft;
+      if (sillyDelta > 0 || wbDelta > 0) {
+        const bot = botsById.get(d.id);
+        if (bot) {
+          const center = bot.getDrawCenterPx(nowMs);
+          if (sillyDelta > 0) itemNotifs.add(center.x - 10, center.y, nowMs, 0, `+${sillyDelta}`);
+          if (wbDelta > 0) itemNotifs.add(center.x + 10, center.y + (sillyDelta > 0 ? 14 : 0), nowMs, 1, `+${wbDelta}`);
+        }
+      }
+    }
+
     const next = prev ? ({ ...prev } as any) : ({ id: d.id } as any);
     for (const [k, v] of Object.entries(d)) {
       if (k === "id" || v === undefined) continue;
@@ -1331,6 +1350,10 @@ function drawMatchPlayfield(nowMs: number): void {
   }
 
   tileMap.drawExplosions(ctx, nowMs);
+
+  // Floating item-earned notifications
+  const itemsImgRef = resources.images.items;
+  itemNotifs.draw(ctx, nowMs, itemsImgRef.isLoaded ? itemsImgRef.image : null);
 }
 
 function drawCountdownSpotlight(nowMs: number): void {
